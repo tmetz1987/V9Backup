@@ -3018,10 +3018,15 @@ let mc, mctx, mx = null, my = null;
 let _kmTimer = null;
 
 function buildKalshiTicker() {
-  // Kalshi format: KXBTC15M-YYMMMDDHHMI-00 in ET timezone
+  // Kalshi uses ET (UTC-5 EST / UTC-4 EDT)
+  // Detect DST: second Sunday March through first Sunday November = EDT (UTC-4)
   const now = new Date();
-  const etOffset = now.getTimezoneOffset() - (5 * 60);
-  const et = new Date(now.getTime() - etOffset * 60000);
+  const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
+  const jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
+  const isDST = now.getTimezoneOffset() < Math.max(jan, jul);
+  const etOffsetHours = isDST ? -4 : -5;
+  const etMs = now.getTime() + (now.getTimezoneOffset() + etOffsetHours * 60) * 60000;
+  const et = new Date(etMs);
   const boundaryMin = Math.floor(et.getMinutes() / 15) * 15;
   const yy  = String(et.getFullYear()).slice(2);
   const mon = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][et.getMonth()];
@@ -5445,4 +5450,10 @@ async function fetchFearGreed() {
         onmouseenter="if(!this.disabled)this.style.background='rgba(255,45,85,0.28)'"
         onmouseleave="this.style.background='rgba(255,45,85,0.15)'"
       >
-        <span id="clear-confirm-btn-labe
+        <span id="clear-confirm-btn-label">I'm Sure</span>
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
