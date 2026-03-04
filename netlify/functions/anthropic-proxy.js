@@ -1,3 +1,7 @@
+// Simple in-memory global store (persists as long as Netlify function is warm)
+// For true persistence across cold starts, upgrade to Netlify Blobs or a DB
+const _store = {};
+
 exports.handler = async function(event, context) {
   const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -9,11 +13,28 @@ exports.handler = async function(event, context) {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  // ── KALSHI — fetch open markets for KXBTC15M series ──────────────
-  const ticker = event.queryStringParameters && event.queryStringParameters.ticker;
-  if (event.httpMethod === 'GET' && ticker) {
+  const qs = event.queryStringParameters || {};
+
+  // ── GLOBAL SAVE (POST ?save=1) ────────────────────────────────────
+  if (event.httpMethod === 'POST' && qs.save) {
     try {
-      // Use the markets list endpoint filtered by series — more reliable than direct ticker lookup
+      const { key, data } = JSON.parse(event.body);
+      _store[key] = data;
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
+    } catch(e) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: e.message }) };
+    }
+  }
+
+  // ── GLOBAL LOAD (GET ?load=1&key=...) ────────────────────────────
+  if (event.httpMethod === 'GET' && qs.load) {
+    const data = _store[qs.key] || null;
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ data }) };
+  }
+
+  // ── KALSHI (GET ?ticker=...) ──────────────────────────────────────
+  if (event.httpMethod === 'GET' && qs.ticker) {
+    try {
       const url = 'https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=5';
       const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const body = await res.text();
