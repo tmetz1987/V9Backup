@@ -1513,14 +1513,14 @@ async function saveGlobalState() {
     await fetch('/.netlify/functions/anthropic-proxy?save=1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: GLOBAL_SAVE_KEY, data })
+      body: JSON.stringify({ data })
     });
   } catch(e) { console.warn('[SAVE] Global save failed:', e.message); }
 }
 
 async function loadGlobalState() {
   try {
-    const res = await fetch('/.netlify/functions/anthropic-proxy?load=1&key=' + GLOBAL_SAVE_KEY);
+    const res = await fetch('/.netlify/functions/anthropic-proxy?load=1');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     if (json && json.data) applyLoadedState(json.data);
