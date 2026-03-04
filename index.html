@@ -685,6 +685,38 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
 </head>
 <body>
 
+<!-- ═══ LOGIN OVERLAY ═══════════════════════════════════════════ -->
+<div id="login-overlay" style="
+  position:fixed;inset:0;z-index:99999;
+  background:linear-gradient(135deg,#0a0a0f 0%,#0d1117 50%,#0a0a0f 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Inter',sans-serif;">
+  <div style="
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:16px;padding:40px 48px;
+    width:340px;text-align:center;
+    box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+    <div style="font-size:32px;margin-bottom:6px;">📊</div>
+    <div style="color:#fff;font-size:20px;font-weight:700;margin-bottom:4px;">BTC Signal Desk</div>
+    <div style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:28px;">Enter password to continue</div>
+    <input id="login-pw" type="password" placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:12px 16px;
+      background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+      border-radius:8px;color:#fff;font-size:15px;outline:none;margin-bottom:12px;"
+      onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button onclick="doLogin()" style="
+      width:100%;padding:12px;background:linear-gradient(135deg,#00d68f,#00b377);
+      border:none;border-radius:8px;color:#000;font-size:15px;
+      font-weight:700;cursor:pointer;margin-bottom:12px;">
+      Login
+    </button>
+    <div id="login-err" style="color:#ff4466;font-size:13px;min-height:18px;"></div>
+  </div>
+</div>
+<!-- ════════════════════════════════════════════════════════════ -->
+
+
 <!-- ═══ HEADER ═══════════════════════════════ -->
 <header>
   <div class="logo"><div class="live-dot"></div>BTC · KALSHI · 15M<span style="margin-left:8px;padding:2px 7px;background:rgba(61,127,255,.12);color:var(--accent);border:1px solid rgba(61,127,255,.3);border-radius:4px;font-size:.58rem;font-weight:700;letter-spacing:.08em;font-family:'DM Mono',monospace">V9</span></div>
@@ -1434,8 +1466,113 @@ const G = {
 //  and adaptive threshold to localStorage.
 // ═══════════════════════════════════════════════════════
 const PERSIST_KEY = 'kalshi_btc_v2_learn';
+const GLOBAL_SAVE_KEY = 'btc_signal_global_v2';
+
+// ── Login ─────────────────────────────────────────────────────────
+const CORRECT_PW = 'moneyprinter1001';
+function doLogin() {
+  const pw = document.getElementById('login-pw').value;
+  if (pw === CORRECT_PW) {
+    sessionStorage.setItem('btc_authed', '1');
+    document.getElementById('login-overlay').style.display = 'none';
+    loadGlobalState().then(() => initApp());
+  } else {
+    document.getElementById('login-err').textContent = 'Incorrect password';
+    document.getElementById('login-pw').value = '';
+  }
+}
+// Auto-check if already authed this session
+window.addEventListener('DOMContentLoaded', () => {
+  if (sessionStorage.getItem('btc_authed') === '1') {
+    document.getElementById('login-overlay').style.display = 'none';
+    loadGlobalState().then(() => initApp());
+  }
+});
+
+// ── Global save via Netlify proxy ─────────────────────────────────
+async function saveGlobalState() {
+  try {
+    const data = {
+      v:                 G.persistVersion,
+      learnedWeights:    G.learnedWeights,
+      indicatorStats:    G.indicatorStats,
+      sessionStats:      G.sessionStats,
+      learnGen:          G.learnGen,
+      adaptiveThreshold: G.adaptiveThreshold,
+      history:           G.history.slice(0, 500),
+      cycleCount:        G.cycleCount,
+      dowStats:          G.dowStats,
+      dirStats:          G.dirStats,
+      lossStreak:        G.lossStreak,
+      cbThresholdBoost:  G.cbThresholdBoost,
+      savedAt:           Date.now(),
+    };
+    // Save locally too as backup
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(data));
+    // Save globally via proxy
+    await fetch('/.netlify/functions/anthropic-proxy?save=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: GLOBAL_SAVE_KEY, data })
+    });
+  } catch(e) { console.warn('[SAVE] Global save failed:', e.message); }
+}
+
+async function loadGlobalState() {
+  try {
+    const res = await fetch('/.netlify/functions/anthropic-proxy?load=1&key=' + GLOBAL_SAVE_KEY);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json && json.data) applyLoadedState(json.data);
+    else {
+      // Fall back to localStorage
+      const raw = localStorage.getItem(PERSIST_KEY);
+      if (raw) applyLoadedState(JSON.parse(raw));
+    }
+  } catch(e) {
+    console.warn('[LOAD] Global load failed, using localStorage:', e.message);
+    try {
+      const raw = localStorage.getItem(PERSIST_KEY);
+      if (raw) applyLoadedState(JSON.parse(raw));
+    } catch(e2) {}
+  }
+}
+
+function applyLoadedState(data) {
+  if (!data || data.v !== G.persistVersion) return;
+  const keys = Object.keys(G.learnedWeights);
+  if (data.learnedWeights && keys.every(k => data.learnedWeights[k] !== undefined)) {
+    G.learnedWeights = data.learnedWeights;
+  }
+  if (data.indicatorStats) {
+    keys.forEach(k => { if (data.indicatorStats[k]) G.indicatorStats[k] = data.indicatorStats[k]; });
+  }
+  if (data.sessionStats)      G.sessionStats      = data.sessionStats;
+  if (data.learnGen !== undefined) G.learnGen      = data.learnGen;
+  if (data.adaptiveThreshold) G.adaptiveThreshold = data.adaptiveThreshold;
+  if (data.dowStats)  G.dowStats  = data.dowStats;
+  if (data.dirStats)  G.dirStats  = data.dirStats;
+  if (data.lossStreak !== undefined)       G.lossStreak       = data.lossStreak;
+  if (data.cbThresholdBoost !== undefined) G.cbThresholdBoost = data.cbThresholdBoost;
+  if (Array.isArray(data.history) && data.history.length) {
+    G.history    = data.history;
+    G.cycleCount = data.cycleCount || data.history.length;
+    buildWRHistory();
+  }
+  const W = G.learnedWeights;
+  console.log('[LOAD] Global state restored | Gen', data.learnGen, '| History:', (data.history||[]).length, 'cycles');
+}
 
 function saveLearnedState() {
+  saveGlobalState();
+}
+
+function loadLearnedState() {
+  // No-op — loading is handled async by loadGlobalState() at login
+}
+
+const _PERSIST_LEGACY = 'kalshi_btc_v2_learn';
+function saveLearnedState_local() {
   try {
     const data = {
       v:                 G.persistVersion,
@@ -5211,7 +5348,7 @@ function tick() {
   drawChart();
 }
 
-async function init() {
+async function initApp() {
   G._startedAt = Date.now(); // used by Anthropic price gate to allow wider drift over time
   // ── Sync to real 15-min clock boundaries ──
   const now      = new Date();
@@ -5233,7 +5370,7 @@ async function init() {
   G.cycleOpenTime = cycleStartDate.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
 
   await initBTCFeed();  // load real candles + start live price feed
-  loadLearnedState();
+  // State loaded globally before initApp() — see loadGlobalState()
   // Force prediction bar update now that cycleOpen is set from real candles
   if (G.cycleOpen) updatePredictionTarget();
 
@@ -5253,7 +5390,7 @@ async function init() {
   setInterval(fetchFearGreed, 300000);
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// App starts only after login — see doLogin() and DOMContentLoaded above
 
 // ═══════════════════════════════════════════════════════
 //  CRYPTO FEAR & GREED INDEX
