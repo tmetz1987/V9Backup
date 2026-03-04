@@ -2150,7 +2150,7 @@ function stopPricePolling()  { if (_priceTimer) { clearTimeout(_priceTimer); _pr
 async function fetchPriceViaAnthropicAPI() {
   try {
     const _nonce = Date.now();
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/.netlify/functions/anthropic-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2255,7 +2255,7 @@ async function _fetchHistoricalStrike() {
 
     // ── Attempt 3: Anthropic API — single forced search, no fallback ─────────
     try {
-      const strikeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      const strikeRes = await fetch('/.netlify/functions/anthropic-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5414,7 +5414,7 @@ async function fetchFearGreed() {
 
   // Attempt 2: Anthropic web_search (works in sandbox)
   try {
-    const fgRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const fgRes = await fetch('/.netlify/functions/anthropic-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
