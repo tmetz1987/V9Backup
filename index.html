@@ -878,6 +878,14 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
         </div>
         <div class="sig-badge b-dim" id="badge-vol">—</div>
       </div>
+      <div class="sig-row">
+        <div class="sig-dot dot-dim" id="dot-crowd"></div>
+        <div class="sig-row-info">
+          <div class="sig-row-name">Kalshi Crowd <span class="tip-i" data-tip="Live YES price from Kalshi prediction market. >55¢ = crowd bets ABOVE strike (bullish). <45¢ = crowd bets BELOW (bearish). Boosts AI confidence when aligned, dampens when opposed. Vetoes signal if crowd >88¢ or <12¢ and AI disagrees.">i</span></div>
+          <div class="sig-row-sub" id="sub-crowd">—</div>
+        </div>
+        <div class="sig-badge b-dim" id="badge-crowd">—</div>
+      </div>
       <div class="vote-wrap">
         <div class="vote-labels">
           <span class="vl-up">▲ Bullish: <span id="votes-up">0</span></span>
@@ -1374,6 +1382,7 @@ const G = {
   // Self-learning: per-indicator accuracy trackers
   // Each indicator tracks correct/total predictions — weights auto-adjust
   learnedWeights: { mom: 3.5, ema: 2.5, rsi: 2.0, macd: 2.0, vol: 1.5, candle: 1.5, bb: 1.0 },
+  kalshiYesPrice: null, // live crowd YES price 0-100¢, null until first Kalshi poll
   indicatorStats: {
     mom:    { correct: 0, total: 0 },
     ema:    { correct: 0, total: 0 },
@@ -2867,7 +2876,27 @@ function evalRawSignal() {
   const cbAdj = G.cbThresholdBoost > 0 ? Math.max(0.82, 1.0 - G.cbThresholdBoost * 0.015) : 1.0;
   s.cbAdj = cbAdj; s.lossStreak = G.lossStreak;
 
-  const rawConf = Math.max(0, Math.min(99, Math.round(baseConf * sessAdj * dowAdj * dirAdj * regimeAdj * stabilityAdj * cbAdj)));
+  // ── Kalshi crowd signal (boost/dampen + veto) ─────────────────────────────
+  // yesPrice 0-100¢: >50 = crowd expects ABOVE strike = AI UP agrees
+  // Boosts confidence up to +12% on agreement, dampens up to -18% on disagreement
+  // Veto: if crowd >88¢ or <12¢ and AI disagrees → force PASS
+  let crowdAdj = 1.0;
+  let crowdVeto = false;
+  const _yp = (typeof G.kalshiYesPrice === 'number') ? G.kalshiYesPrice : null;
+  if (_yp !== null) {
+    const _aiAbove    = norm > 0;
+    const _crowdAbove = _yp > 50;
+    const _neutral    = _yp >= 45 && _yp <= 55;
+    const _agrees     = _aiAbove === _crowdAbove;
+    const _strength   = Math.abs(_yp - 50) / 50; // 0=neutral → 1=max conviction
+    if (!_neutral) {
+      crowdAdj = _agrees ? (1.0 + _strength * 0.12) : (1.0 - _strength * 0.18);
+    }
+    if (!_agrees && (_yp > 88 || _yp < 12)) crowdVeto = true;
+    s.crowdAdj = crowdAdj; s.crowdVeto = crowdVeto; s.kalshiYP = _yp;
+  }
+
+  const rawConf = Math.max(0, Math.min(99, Math.round(baseConf * sessAdj * dowAdj * dirAdj * regimeAdj * stabilityAdj * cbAdj * crowdAdj)));
   s.dowAdj = dowAdj; s.dirAdj = dirAdj; s.regimeAdj = regimeAdj; s.regime = G.regime;
 
   // ══════════════════════════════════════════════════════
@@ -2883,6 +2912,12 @@ function evalRawSignal() {
   } else if (norm <= -CONF_SIGNAL_THRESHOLD) {
     rec = 'DOWN';
   } else {
+    rec = 'PASS';
+  }
+
+  // Apply crowd veto — override to PASS if crowd is extremely lopsided against AI
+  if (crowdVeto && rec !== 'PASS') {
+    console.log('[CROWD-VETO] Crowd ' + (G.kalshiYesPrice) + '¢ overrides AI ' + rec + ' → PASS');
     rec = 'PASS';
   }
 
@@ -3085,6 +3120,7 @@ async function pollKalshiMarket() {
     } else if (agEl) {
       agEl.style.display = 'none';
     }
+    G.kalshiYesPrice = yesPrice; // feed into AI scoring
     console.log('[KALSHI] ' + (mkt.ticker||ticker) + ' YES=' + yesPrice + '¢ crowd=' + crowdDir);
   } catch(e) {
     console.warn('[KALSHI] ' + e.message);
@@ -3934,6 +3970,24 @@ function updateSigRows() {
     vr >= 2.0 ? '🔥 SURGE'  :
     vr >= 1.5 ? '▲ HIGH'    :
     vr >= 0.85? 'NORMAL'    : '▼ THIN');
+
+  // Kalshi crowd signal row
+  const _kyp = G.kalshiYesPrice;
+  if (_kyp !== null && _kyp !== undefined) {
+    const _cDir   = _kyp > 55 ? 1 : _kyp < 45 ? -1 : 0;
+    const _cLabel = _kyp > 88 ? '🔥 EXTREME YES' :
+                    _kyp > 70 ? '▲ BULLISH CROWD' :
+                    _kyp > 55 ? '↑ LEAN YES' :
+                    _kyp < 12 ? '💥 EXTREME NO' :
+                    _kyp < 30 ? '▼ BEARISH CROWD' :
+                    _kyp < 45 ? '↓ LEAN NO' : '↔ NEUTRAL';
+    const _cVeto  = G.signals && G.signals.crowdVeto;
+    setRow('crowd', _cDir,
+      `YES ${_kyp}¢ · NO ${100-_kyp}¢${_cVeto ? ' · ⚠ VETO ACTIVE' : ''}`,
+      _cLabel);
+  } else {
+    setRow('crowd', 0, 'Awaiting Kalshi data…', '—');
+  }
 
   // Bull/bear vote summary (uses EMA+RSI+MACD+BB learned indicators)
   document.getElementById('votes-up').textContent = G.bullVotes||0;
