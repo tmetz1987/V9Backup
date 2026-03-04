@@ -731,6 +731,16 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
     <span id="session-badge" style="padding:2px 9px;border-radius:5px;font-size:.58rem;font-weight:700;letter-spacing:.07em;font-family:'DM Mono',monospace;white-space:nowrap;border:1px solid rgba(255,255,255,.12);transition:background .4s,color .4s;cursor:default" title="Current market session">— —</span>
     <span id="hdr-clock">--:--:--</span>
     <span class="tag">15M</span>
+    <button onclick="doLogout()" title="Lock screen" style="
+      background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+      border-radius:6px;color:rgba(255,255,255,0.5);font-size:.7rem;
+      padding:4px 10px;cursor:pointer;margin-left:6px;
+      font-family:'DM Mono',monospace;letter-spacing:.05em;
+      transition:all .2s;" 
+      onmouseover="this.style.color='#ff4466';this.style.borderColor='rgba(255,68,102,0.4)'"
+      onmouseout="this.style.color='rgba(255,255,255,0.5)';this.style.borderColor='rgba(255,255,255,0.12)'">
+      🔒 LOCK
+    </button>
   </div>
 </header>
 
@@ -1470,12 +1480,20 @@ const GLOBAL_SAVE_KEY = 'btc_signal_global_v2';
 
 // ── Login ─────────────────────────────────────────────────────────
 const CORRECT_PW = 'moneyprinter1001';
+function doLogout() {
+  sessionStorage.removeItem('btc_authed');
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('login-pw').value = '';
+  document.getElementById('login-err').textContent = '';
+  // App keeps running in background — just hide the UI
+}
+
 function doLogin() {
   const pw = document.getElementById('login-pw').value;
   if (pw === CORRECT_PW) {
     sessionStorage.setItem('btc_authed', '1');
     document.getElementById('login-overlay').style.display = 'none';
-    loadGlobalState().then(() => initApp());
+    // App already running in background — no need to reinit
   } else {
     document.getElementById('login-err').textContent = 'Incorrect password';
     document.getElementById('login-pw').value = '';
@@ -1483,10 +1501,13 @@ function doLogin() {
 }
 // Auto-check if already authed this session
 window.addEventListener('DOMContentLoaded', () => {
+  // Always start the app regardless of auth state — login is visual security only
+  loadGlobalState().then(() => initApp());
+  // Show/hide overlay based on auth
   if (sessionStorage.getItem('btc_authed') === '1') {
     document.getElementById('login-overlay').style.display = 'none';
-    loadGlobalState().then(() => initApp());
   }
+  // Overlay stays visible if not authed — app runs behind it
 });
 
 // ── Global save via Netlify proxy ─────────────────────────────────
@@ -3306,6 +3327,7 @@ function initChart() {
   mc.addEventListener('mouseleave', () => { mx = my = null; });
 }
 function resizeChart() {
+  if (!mc || !mc.parentElement) return;
   const dpr = window.devicePixelRatio || 1;
   const w   = mc.parentElement.clientWidth;
   const h   = mc.parentElement.clientHeight;
