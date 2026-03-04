@@ -3042,11 +3042,18 @@ function buildKalshiTicker() {
 async function pollKalshiMarket() {
   try {
     const ticker = buildKalshiTicker();
-    const res    = await fetch('/.netlify/functions/anthropic-proxy?ticker=' + ticker);
+    // Use markets list endpoint — more reliable than direct ticker lookup
+    const res  = await fetch('/.netlify/functions/anthropic-proxy?ticker=' + ticker);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data   = await res.json();
-    const mkt    = data.market;
-    if (!mkt) throw new Error('no market object');
+    const data = await res.json();
+
+    // Find the market closest to our target ticker from the list
+    const markets = data.markets || [];
+    if (!markets.length) throw new Error('no open markets');
+
+    // Pick the market whose close_time is soonest / matches current cycle
+    const now = Date.now() / 1000;
+    let mkt = markets.find(m => m.close_time > now) || markets[0];
 
     const yesPrice = mkt.yes_ask || mkt.yes_price || 0;
     const noPrice  = mkt.no_ask  || mkt.no_price  || 0;
@@ -3060,7 +3067,7 @@ async function pollKalshiMarket() {
     document.getElementById('km-yes').textContent     = yesPrice + '¢';
     document.getElementById('km-no').textContent      = noPrice  + '¢';
     document.getElementById('km-implied').textContent = yesPrice + '%';
-    document.getElementById('km-ticker').textContent  = ticker;
+    document.getElementById('km-ticker').textContent  = mkt.ticker || ticker;
     document.getElementById('km-vol').textContent     = vol >= 1000 ? (vol/1000).toFixed(1)+'k' : vol;
 
     const crowdEl = document.getElementById('km-crowd');
@@ -3078,13 +3085,12 @@ async function pollKalshiMarket() {
     } else if (agEl) {
       agEl.style.display = 'none';
     }
-    console.log('[KALSHI] ' + ticker + ' YES=' + yesPrice + '¢ crowd=' + crowdDir);
+    console.log('[KALSHI] ' + (mkt.ticker||ticker) + ' YES=' + yesPrice + '¢ crowd=' + crowdDir);
   } catch(e) {
     console.warn('[KALSHI] ' + e.message);
   }
   _kmTimer = setTimeout(pollKalshiMarket, 30000);
 }
-
 function startKalshiMarket() {
   if (_kmTimer) return;
   pollKalshiMarket();
