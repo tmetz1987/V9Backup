@@ -3018,15 +3018,17 @@ let mc, mctx, mx = null, my = null;
 let _kmTimer = null;
 
 function buildKalshiTicker() {
-  const now     = new Date();
-  const minsIn  = now.getMinutes() % 15;
-  const boundary = new Date(now.getTime() - minsIn * 60000);
-  const yy  = String(boundary.getFullYear()).slice(2);
-  const mon  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][boundary.getMonth()];
-  const dd   = String(boundary.getDate()).padStart(2,'0');
-  const hh   = String(boundary.getHours()).padStart(2,'0');
-  const mi   = String(Math.floor(boundary.getMinutes()/15)*15).padStart(2,'0');
-  return 'KXBTC15M-' + yy + mon + dd + hh + mi;
+  // Kalshi format: KXBTC15M-YYMMMDDHHMI-00 in ET timezone
+  const now = new Date();
+  const etOffset = now.getTimezoneOffset() - (5 * 60);
+  const et = new Date(now.getTime() - etOffset * 60000);
+  const boundaryMin = Math.floor(et.getMinutes() / 15) * 15;
+  const yy  = String(et.getFullYear()).slice(2);
+  const mon = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][et.getMonth()];
+  const dd  = String(et.getDate()).padStart(2,'0');
+  const hh  = String(et.getHours()).padStart(2,'0');
+  const mi  = String(boundaryMin).padStart(2,'0');
+  return 'KXBTC15M-' + yy + mon + dd + hh + mi + '-00';
 }
 
 async function pollKalshiMarket() {
@@ -5443,10 +5445,4 @@ async function fetchFearGreed() {
         onmouseenter="if(!this.disabled)this.style.background='rgba(255,45,85,0.28)'"
         onmouseleave="this.style.background='rgba(255,45,85,0.15)'"
       >
-        <span id="clear-confirm-btn-label">I'm Sure</span>
-      </button>
-    </div>
-  </div>
-</div>
-</body>
-</html>
+        <span id="clear-confirm-btn-labe
