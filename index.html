@@ -1795,11 +1795,7 @@ const PRICE_SOURCES = [
     url:  'https://api.gemini.com/v1/pubticker/btcusd',
     parse: d => parseFloat(d.last)
   },
-  {
-    name: 'Bitfinex',
-    url:  'https://api.bitfinex.com/v1/pubticker/btcusd',
-    parse: d => parseFloat(d.last_price)
-  },
+  
   {
     name: 'CryptoCompare',
     url:  'https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD',
@@ -2139,60 +2135,20 @@ async function fetchMultiPrice() {
     applyPrice(median);
     console.log('[PRICE] median $' + median.toFixed(2) + ' from ' + results.length + '/' + PRICE_SOURCES.length + ' sources');
   }
+  if (_priceTimer) clearTimeout(_priceTimer);
   _priceTimer = setTimeout(fetchMultiPrice, 5000);
 }
 function startPricePolling() { if (_priceTimer) return; _priceTimer = setTimeout(fetchMultiPrice, 500); }
 function stopPricePolling()  { if (_priceTimer) { clearTimeout(_priceTimer); _priceTimer = null; } }
 
-// === ANTHROPIC API — primary price source in claude.ai sandbox ===
-// Multi-source REST APIs are blocked by sandbox CORS — Anthropic web search
-// is the only reliable live price feed available here.
+// === ANTHROPIC API — disabled as price source (proxy 502 on Netlify free tier) ===
+// Price comes from 4 reliable REST sources: Kraken, Gemini, Coinbase, CryptoCompare
+// Anthropic kept only for Fear & Greed and Strike fallback searches
+let _anthropicTimer = null;
 async function fetchPriceViaAnthropicAPI() {
-  try {
-    const _nonce = Date.now();
-    const res = await fetch('/.netlify/functions/anthropic-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 64,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        tool_choice: { type: 'tool', name: 'web_search' },
-        system: 'Search for the current Bitcoin price and reply with ONLY the USD number. No words, no $, no explanation. Example: 83421.50',
-        messages: [{ role: 'user', content: 'id:' + _nonce + ' Search "BTCUSDT live price binance" and reply with only the current price number.' }]
-      })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    let raw = '';
-    for (const blk of (data.content || [])) { if (blk.type === 'text' && blk.text) raw += ' ' + blk.text; }
-    raw = raw.trim();
-    const nums = (raw.match(/\b\d{4,6}(?:\.\d{1,2})?\b/g) || [])
-      .map(n => parseFloat(n)).filter(v => v >= 20000 && v <= 150000);
-    if (nums.length === 0) throw new Error('no valid price in: ' + raw.slice(0, 80));
-    nums.sort((a, b) => a - b);
-    const price = nums[Math.floor(nums.length / 2)];
-
-    // Accept price — sanity check: reject if >3% from last known (catches stale search results)
-    if (G.price > 0) {
-      const diff = Math.abs(price - G.price) / G.price;
-      if (diff > 0.03) {
-        console.warn('[ANTHROPIC] rejected $' + price.toFixed(0) + ' — ' + (diff*100).toFixed(1) + '% from known $' + G.price.toFixed(0));
-        _anthropicTimer = setTimeout(fetchPriceViaAnthropicAPI, 5000);
-        return;
-      }
-    }
-
-    applyPrice(price);
-    console.log('[ANTHROPIC] $' + price.toFixed(2) + ' @ ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}));
-
-    // Seed on first run
-    if (!G._strikeSetAt) _fetchHistoricalStrike();
-
-  } catch(e) {
-    console.warn('[ANTHROPIC] error:', e.message);
-  }
-  _anthropicTimer = setTimeout(fetchPriceViaAnthropicAPI, 5000);
+  // No-op — price fully covered by multi-source polling
+  // Retry in 60s in case proxy gets fixed later
+  _anthropicTimer = setTimeout(fetchPriceViaAnthropicAPI, 60000);
 }
 
 // Fetch the BTC price at the start of the current 15-min cycle (the real Kalshi strike).
@@ -2255,7 +2211,7 @@ async function _fetchHistoricalStrike() {
 
     // ── Attempt 3: Anthropic API — single forced search, no fallback ─────────
     try {
-      const strikeRes = await fetch('/.netlify/functions/anthropic-proxy', {
+      const strikeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5414,7 +5370,7 @@ async function fetchFearGreed() {
 
   // Attempt 2: Anthropic web_search (works in sandbox)
   try {
-    const fgRes = await fetch('/.netlify/functions/anthropic-proxy', {
+    const fgRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
