@@ -9,10 +9,9 @@ exports.handler = async function(event, context) {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  // ── KALSHI (GET) ─────────────────────────────────────────────────
-  const kalshiMatch = event.path.match(/\/anthropic-proxy\/kalshi\/(.+)/);
-  if (kalshiMatch) {
-    const ticker = kalshiMatch[1];
+  // ── KALSHI (GET with ?ticker=KXBTC15M-...) ───────────────────────
+  const ticker = event.queryStringParameters && event.queryStringParameters.ticker;
+  if (event.httpMethod === 'GET' && ticker) {
     try {
       const res = await fetch(
         'https://api.elections.kalshi.com/trade-api/v2/markets/' + ticker,
@@ -25,7 +24,7 @@ exports.handler = async function(event, context) {
     }
   }
 
-  // ── ANTHROPIC (POST) ─────────────────────────────────────────────
+  // ── ANTHROPIC (POST) ──────────────────────────────────────────────
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
