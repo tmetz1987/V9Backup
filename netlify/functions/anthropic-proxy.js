@@ -9,14 +9,13 @@ exports.handler = async function(event, context) {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  // ── KALSHI (GET with ?ticker=KXBTC15M-...) ───────────────────────
+  // ── KALSHI — fetch open markets for KXBTC15M series ──────────────
   const ticker = event.queryStringParameters && event.queryStringParameters.ticker;
   if (event.httpMethod === 'GET' && ticker) {
     try {
-      const res = await fetch(
-        'https://api.elections.kalshi.com/trade-api/v2/markets/' + ticker,
-        { headers: { 'Accept': 'application/json' } }
-      );
+      // Use the markets list endpoint filtered by series — more reliable than direct ticker lookup
+      const url = 'https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=5';
+      const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const body = await res.text();
       return { statusCode: res.status, headers: { ...CORS, 'Content-Type': 'application/json' }, body };
     } catch(e) {
