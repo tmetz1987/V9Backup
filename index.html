@@ -1585,7 +1585,7 @@ function applyLoadedState(data) {
 }
 
 function saveLearnedState() {
-  saveGlobalState();
+  saveGlobalState().catch(e => console.warn('[SAVE] Dropbox save error:', e.message));
 }
 
 function loadLearnedState() {
@@ -5413,6 +5413,19 @@ async function initApp() {
 }
 
 // App starts only after login — see doLogin() and DOMContentLoaded above
+
+// Save to Dropbox before page closes
+window.addEventListener('beforeunload', () => {
+  saveLearnedState();
+});
+
+// Auto-save every 5 minutes as safety net
+setInterval(() => {
+  if (sessionStorage.getItem('btc_authed') === '1') {
+    saveGlobalState().catch(()=>{});
+    console.log('[SAVE] Auto-save to Dropbox');
+  }
+}, 5 * 60 * 1000);
 
 // ═══════════════════════════════════════════════════════
 //  CRYPTO FEAR & GREED INDEX
