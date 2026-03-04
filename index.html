@@ -762,6 +762,34 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
       </div>
     </div>
 
+    <!-- ── Kalshi Live Market Panel ────────────────────────────────── -->
+    <div id="kalshi-mkt-bar" style="display:none;align-items:center;gap:10px;padding:5px 14px;background:rgba(61,127,255,0.07);border-bottom:1px solid rgba(61,127,255,0.22);flex-wrap:wrap">
+      <span style="font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);white-space:nowrap">📈 KALSHI MARKET</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <span style="font-size:.55rem;color:var(--dim);font-weight:600">YES</span>
+        <span id="km-yes" style="font-family:'DM Mono',monospace;font-size:.8rem;font-weight:800;color:#00d68f">—¢</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <span style="font-size:.55rem;color:var(--dim);font-weight:600">NO</span>
+        <span id="km-no" style="font-family:'DM Mono',monospace;font-size:.8rem;font-weight:800;color:#ff4466">—¢</span>
+      </div>
+      <div style="width:1px;height:14px;background:var(--border)"></div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:.53rem;color:var(--dim);font-weight:600;letter-spacing:.06em">CROWD</span>
+        <span id="km-crowd" style="font-family:'DM Mono',monospace;font-size:.74rem;font-weight:800;color:var(--dim)">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:.53rem;color:var(--dim);font-weight:600;letter-spacing:.06em">IMPLIED</span>
+        <span id="km-implied" style="font-family:'DM Mono',monospace;font-size:.74rem;font-weight:700;color:var(--dim)">—%</span>
+      </div>
+      <div id="km-agree" style="display:none;padding:2px 8px;border-radius:4px;font-size:.58rem;font-weight:800;letter-spacing:.05em"></div>
+      <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+        <span style="font-size:.5rem;color:var(--dim)">VOL</span>
+        <span id="km-vol" style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--dim)">—</span>
+        <span id="km-ticker" style="font-size:.48rem;color:rgba(255,255,255,0.18);font-family:'DM Mono',monospace;margin-left:4px"></span>
+      </div>
+    </div>
+
     <div class="chart-wrap" style="position:relative">
       <!-- TradingView Advanced Chart Widget — always visible -->
       <div id="tv-chart-container" style="width:100%;height:100%"></div>
@@ -2016,98 +2044,19 @@ async function initBTCFeed() {
   // Binance WS works locally — multi-source polling is the sandbox primary
   connectWS();
   startPricePolling();
-  fetchPriceViaAnthropicAPI(); // Anthropic as additional independent check
+  fetchPriceViaAnthropicAPI();
+  startKalshiMarket();
 }
 
 // === WEBSOCKET ===
 function connectWS() {
-  if (_ws && (_ws.readyState === 0 || _ws.readyState === 1)) return;
-  const url = WS_URLS[_wsUrlIdx % WS_URLS.length];
-  // connecting...
-  try { _ws = new WebSocket(url); }
-  catch(e) { console.warn('[WS] Create failed:', e.message); _wsUrlIdx++; scheduleWSRetry(); return; }
-
-  const openTimer = setTimeout(function() {
-    if (_ws && _ws.readyState !== WebSocket.OPEN) { _wsUrlIdx++; _ws.close(); }
-  }, 8000);
-
-  _ws.onopen = function() {
-    clearTimeout(openTimer);
-    _wsRetry      = 0;
-    G.wsKlineLive = false;
-    G.dataSource  = 'live'; setDataBadge('live');
-    if (_anthropicTimer) { clearTimeout(_anthropicTimer); _anthropicTimer = null; }
-    stopPricePolling();
-    // Snap display/smooth prices on first real tick — no easing lag
-    if (G.price) { G.displayPrice = G.price; G.smoothPrice = G.price; }
-    console.log('[WS] Binance connected: btcusdt@ticker + btcusdt@kline_1m');
-  };
-
-  _ws.onmessage = function(evt) {
-    try {
-      const msg = JSON.parse(evt.data);
-      // Combined stream wraps each sub-stream: { stream: "btcusdt@ticker", data: {...} }
-      const d = msg.data || msg;
-
-      // ── btcusdt@ticker ────────────────────────────────────────────────────
-      // Fires on every trade. d.c = current last price (string).
-      // Persistent connection — no polling, no rate limit, no API key.
-      if (d.e === '24hrTicker') {
-        const price = parseFloat(d.c);
-        if (!price || price < 10000) return;
-        applyPrice(price);
-
-      // ── btcusdt@kline_1m ──────────────────────────────────────────────────
-      // Authoritative 1-min OHLCV updates + candle close event for rolling
-      } else if (d.e === 'kline') {
-        const k = d.k;
-        if (!k || k.s !== 'BTCUSDT') return;
-        G.wsKlineLive = true;
-        const kPrice = parseFloat(k.c);
-        const kOpen  = parseFloat(k.o);
-        const live   = G.candles[G.candles.length - 1];
-        if (live) {
-          live.o = kOpen; live.h = parseFloat(k.h);
-          live.l = parseFloat(k.l); live.c = kPrice; live.v = parseFloat(k.v);
-        }
-        const msLeft = parseInt(k.T) - Date.now();
-        if (msLeft > 0 && msLeft <= 60000) G.candleSecsLeft = Math.ceil(msLeft / 1000);
-        if (k.x) {
-          // Candle closed — open fresh candle at close price
-          const newO    = parseFloat(k.c);
-          const closeMs = parseInt(k.T) + 1; // +1 ms = start of next candle
-          G.candles.push({ t: closeMs, o: newO, h: newO, l: newO, c: newO, v: 0 });
-          if (G.candles.length > 120) G.candles.shift();
-          G.candleSecsLeft = 60;
-          // Kalshi boundary: new candle opens at :00 / :15 / :30 / :45
-          const newCandleDate = new Date(closeMs);
-          if (newCandleDate.getMinutes() % 15 === 0 && newCandleDate.getSeconds() < 5) {
-            const exactBoundary = Math.floor(closeMs / 60000) * 60000;
-            _setStrike(newO, exactBoundary);
-            updatePredictionTarget();
-          }
-        }
-      }
-    } catch(e) { console.warn('[WS] parse error:', e.message); }
-  };
-
-  _ws.onerror = function() { console.warn('[WS] Socket error — onclose will reconnect'); };
-  _ws.onclose = function() {
-    clearTimeout(openTimer);
-    _ws = null; _wsUrlIdx++;
-    G.wsKlineLive = false;
-    if (G.dataSource === 'live') { G.dataSource = 'connecting'; maybeBadgeConnecting(); }
-    console.warn('[WS] Disconnected — restarting fallbacks');
-    startPricePolling();
-    if (!_anthropicTimer) fetchPriceViaAnthropicAPI(); // resume API fallback
-    scheduleWSRetry();
-  };
+  // Binance WebSocket blocked on Netlify free tier (no backend).
+  // Price handled by 4 REST sources (Kraken/Gemini/Coinbase/CryptoCompare) every 5s.
+  // WS will be re-enabled when backend proxy is added for Telegram bot phase.
+  console.log('[WS] Skipped — using REST polling (Netlify free tier)');
 }
 
-function scheduleWSRetry() {
-  const delay = Math.min(30000, 2000 * Math.pow(2, Math.min(_wsRetry++, 5)));
-  setTimeout(connectWS, delay);
-}
+function scheduleWSRetry() { /* disabled — REST polling active */ }
 
 // === MULTI-SOURCE PRICE POLLING ===
 // Fires all 5 sources simultaneously every 5s — takes median of responses.
@@ -3062,6 +3011,74 @@ function applySignalStabilization() {
 // ═══════════════════════════════════════════════════════
 let mc, mctx, mx = null, my = null;
 
+
+// ═══════════════════════════════════════════════════════
+//  KALSHI LIVE MARKET PANEL
+// ═══════════════════════════════════════════════════════
+let _kmTimer = null;
+
+function buildKalshiTicker() {
+  const now     = new Date();
+  const minsIn  = now.getMinutes() % 15;
+  const boundary = new Date(now.getTime() - minsIn * 60000);
+  const yy  = String(boundary.getFullYear()).slice(2);
+  const mon  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][boundary.getMonth()];
+  const dd   = String(boundary.getDate()).padStart(2,'0');
+  const hh   = String(boundary.getHours()).padStart(2,'0');
+  const mi   = String(Math.floor(boundary.getMinutes()/15)*15).padStart(2,'0');
+  return 'KXBTC15M-' + yy + mon + dd + hh + mi;
+}
+
+async function pollKalshiMarket() {
+  try {
+    const ticker = buildKalshiTicker();
+    const res    = await fetch('https://api.elections.kalshi.com/trade-api/v2/markets/' + ticker);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data   = await res.json();
+    const mkt    = data.market;
+    if (!mkt) throw new Error('no market object');
+
+    const yesPrice = mkt.yes_ask || mkt.yes_price || 0;
+    const noPrice  = mkt.no_ask  || mkt.no_price  || 0;
+    const vol      = mkt.volume  || 0;
+    const crowdDir = yesPrice > 50 ? 'ABOVE' : yesPrice < 50 ? 'BELOW' : 'EVEN';
+    const crowdClr = yesPrice > 50 ? '#00d68f' : yesPrice < 50 ? '#ff4466' : 'var(--dim)';
+
+    const bar = document.getElementById('kalshi-mkt-bar');
+    if (bar) bar.style.display = 'flex';
+
+    document.getElementById('km-yes').textContent     = yesPrice + '¢';
+    document.getElementById('km-no').textContent      = noPrice  + '¢';
+    document.getElementById('km-implied').textContent = yesPrice + '%';
+    document.getElementById('km-ticker').textContent  = ticker;
+    document.getElementById('km-vol').textContent     = vol >= 1000 ? (vol/1000).toFixed(1)+'k' : vol;
+
+    const crowdEl = document.getElementById('km-crowd');
+    if (crowdEl) { crowdEl.textContent = crowdDir; crowdEl.style.color = crowdClr; }
+
+    const agEl   = document.getElementById('km-agree');
+    const ourDir = G.recommendation === 'UP' ? 'ABOVE' : G.recommendation === 'DOWN' ? 'BELOW' : null;
+    if (agEl && ourDir) {
+      const agrees          = ourDir === crowdDir;
+      agEl.style.display    = 'block';
+      agEl.textContent      = agrees ? '✓ AI + CROWD AGREE' : '⚠ AI vs CROWD';
+      agEl.style.background = agrees ? 'rgba(0,214,143,0.15)' : 'rgba(255,68,102,0.15)';
+      agEl.style.color      = agrees ? '#00d68f' : '#ff4466';
+      agEl.style.border     = agrees ? '1px solid rgba(0,214,143,0.3)' : '1px solid rgba(255,68,102,0.3)';
+    } else if (agEl) {
+      agEl.style.display = 'none';
+    }
+    console.log('[KALSHI] ' + ticker + ' YES=' + yesPrice + '¢ crowd=' + crowdDir);
+  } catch(e) {
+    console.warn('[KALSHI] ' + e.message);
+  }
+  _kmTimer = setTimeout(pollKalshiMarket, 30000);
+}
+
+function startKalshiMarket() {
+  if (_kmTimer) return;
+  pollKalshiMarket();
+}
 
 // ── TradingView Advanced Chart Widget toggle ──────────────────────────────────
 function initTVChart() {
