@@ -3018,8 +3018,8 @@ let mc, mctx, mx = null, my = null;
 let _kmTimer = null;
 
 function buildKalshiTicker() {
-  // Kalshi uses ET (UTC-5 EST / UTC-4 EDT)
-  // Detect DST: second Sunday March through first Sunday November = EDT (UTC-4)
+  // Kalshi ticker = CLOSING boundary (ceiling), in ET timezone, no -00 suffix
+  // e.g. 8:45-9:00 PM PST cycle -> midnight ET -> KXBTC15M-26MAR040000
   const now = new Date();
   const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
   const jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
@@ -3027,13 +3027,16 @@ function buildKalshiTicker() {
   const etOffsetHours = isDST ? -4 : -5;
   const etMs = now.getTime() + (now.getTimezoneOffset() + etOffsetHours * 60) * 60000;
   const et = new Date(etMs);
-  const boundaryMin = Math.floor(et.getMinutes() / 15) * 15;
-  const yy  = String(et.getFullYear()).slice(2);
-  const mon = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][et.getMonth()];
-  const dd  = String(et.getDate()).padStart(2,'0');
-  const hh  = String(et.getHours()).padStart(2,'0');
-  const mi  = String(boundaryMin).padStart(2,'0');
-  return 'KXBTC15M-' + yy + mon + dd + hh + mi + '-00';
+  // Ceiling to next 15-min boundary
+  const totalMins = et.getHours() * 60 + et.getMinutes();
+  const ceilMins  = Math.ceil(totalMins / 15) * 15;
+  const closeDate = new Date(etMs + (ceilMins - totalMins) * 60000);
+  const yy  = String(closeDate.getFullYear()).slice(2);
+  const mon = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][closeDate.getMonth()];
+  const dd  = String(closeDate.getDate()).padStart(2,'0');
+  const hh  = String(closeDate.getHours()).padStart(2,'0');
+  const mi  = String(closeDate.getMinutes()).padStart(2,'0');
+  return 'KXBTC15M-' + yy + mon + dd + hh + mi;
 }
 
 async function pollKalshiMarket() {
