@@ -2141,15 +2141,14 @@ async function fetchMultiPrice() {
 function startPricePolling() { if (_priceTimer) return; _priceTimer = setTimeout(fetchMultiPrice, 500); }
 function stopPricePolling()  { if (_priceTimer) { clearTimeout(_priceTimer); _priceTimer = null; } }
 
-// === ANTHROPIC API — disabled as price source (proxy 502 on Netlify free tier) ===
-// Price comes from 4 reliable REST sources: Kraken, Gemini, Coinbase, CryptoCompare
-// Anthropic kept only for Fear & Greed and Strike fallback searches
-let _anthropicTimer = null;
+// === ANTHROPIC API — primary price source in claude.ai sandbox ===
+// Multi-source REST APIs are blocked by sandbox CORS — Anthropic web search
 async function fetchPriceViaAnthropicAPI() {
-  // No-op — price fully covered by multi-source polling
-  // Retry in 60s in case proxy gets fixed later
+  // Disabled as price source — 4 REST APIs handle price fully
+  // Proxy kept for Strike fallback search only
   _anthropicTimer = setTimeout(fetchPriceViaAnthropicAPI, 60000);
 }
+
 
 // Fetch the BTC price at the start of the current 15-min cycle (the real Kalshi strike).
 // Strategy: ask Binance klines directly for the 1m candle at the boundary timestamp.
