@@ -1,6 +1,37 @@
-// Simple in-memory global store (persists as long as Netlify function is warm)
-// For true persistence across cold starts, upgrade to Netlify Blobs or a DB
-const _store = {};
+const DROPBOX_FILE = '/btc-signal-desk/global-state.json';
+
+async function dropboxSave(token, data) {
+  const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Dropbox-API-Arg': JSON.stringify({
+        path: DROPBOX_FILE,
+        mode: 'overwrite',
+        autorename: false,
+        mute: true
+      }),
+      'Content-Type': 'application/octet-stream'
+    },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Dropbox save HTTP ' + res.status);
+  return true;
+}
+
+async function dropboxLoad(token) {
+  const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_FILE })
+    }
+  });
+  if (res.status === 409) return null; // file doesn't exist yet
+  if (!res.ok) throw new Error('Dropbox load HTTP ' + res.status);
+  const text = await res.text();
+  return JSON.parse(text);
+}
 
 exports.handler = async function(event, context) {
   const CORS = {
@@ -13,23 +44,28 @@ exports.handler = async function(event, context) {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  const qs = event.queryStringParameters || {};
+  const qs  = event.queryStringParameters || {};
+  const DBX = process.env.DROPBOX_TOKEN;
 
   // ── GLOBAL SAVE (POST ?save=1) ────────────────────────────────────
   if (event.httpMethod === 'POST' && qs.save) {
     try {
-      const { key, data } = JSON.parse(event.body);
-      _store[key] = data;
+      const { data } = JSON.parse(event.body);
+      await dropboxSave(DBX, data);
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
     } catch(e) {
-      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: e.message }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: e.message }) };
     }
   }
 
-  // ── GLOBAL LOAD (GET ?load=1&key=...) ────────────────────────────
+  // ── GLOBAL LOAD (GET ?load=1) ─────────────────────────────────────
   if (event.httpMethod === 'GET' && qs.load) {
-    const data = _store[qs.key] || null;
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ data }) };
+    try {
+      const data = await dropboxLoad(DBX);
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ data }) };
+    } catch(e) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: e.message }) };
+    }
   }
 
   // ── KALSHI (GET ?ticker=...) ──────────────────────────────────────
