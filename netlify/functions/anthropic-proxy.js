@@ -14,7 +14,6 @@ exports.handler = async function(event, context) {
   if (kalshiMatch) {
     const ticker = kalshiMatch[1];
     try {
-      const fetch = require('node-fetch');
       const res = await fetch(
         'https://api.elections.kalshi.com/trade-api/v2/markets/' + ticker,
         { headers: { 'Accept': 'application/json' } }
@@ -28,7 +27,6 @@ exports.handler = async function(event, context) {
 
   // ── ANTHROPIC (POST) ─────────────────────────────────────────────
   try {
-    const fetch = require('node-fetch');
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
