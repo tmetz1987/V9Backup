@@ -2,7 +2,23 @@ const DROPBOX_FILE     = '/btc-signal-desk/global-state.json';
 const DROPBOX_TRADES   = '/btc-signal-desk/trade-log.json';
 
 // ── Dropbox helpers ───────────────────────────────────────────────
-async function dropboxSave(token, path, data) {
+async function getDropboxAccessToken() {
+  const res = await fetch('https://api.dropbox.com/oauth2/token', {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type:    'refresh_token',
+      refresh_token: process.env.DROPBOX_REFRESH_TOKEN,
+      client_id:     process.env.DROPBOX_APP_KEY,
+      client_secret: process.env.DROPBOX_APP_SECRET,
+    })
+  });
+  if (!res.ok) throw new Error('Dropbox token refresh HTTP ' + res.status);
+  const data = await res.json();
+  return data.access_token;
+}
+
+async function dropboxSave(unusedToken, path, data) {
+  const token = await getDropboxAccessToken();
   const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
     headers: {
@@ -16,7 +32,8 @@ async function dropboxSave(token, path, data) {
   return true;
 }
 
-async function dropboxLoad(token, path) {
+async function dropboxLoad(unusedToken, path) {
+  const token = await getDropboxAccessToken();
   const res = await fetch('https://content.dropboxapi.com/2/files/download', {
     method: 'POST',
     headers: {
