@@ -161,9 +161,10 @@ exports.handler = async function(event, context) {
         // Only notify on skip if bot is live
         if (botEnabled) {
           await sendTelegram(TG_TOK, TG_CHAT,
-            `⏭ <b>BTC Signal Desk — SKIP</b>\n` +
-            `Confidence too low (${conf}%) — no trade placed.\n` +
-            `BTC: $${Number(price).toLocaleString()} | Strike: $${Number(strike).toLocaleString()}`
+            `⏭ <b>SKIP — 10-min Snapshot</b>\n\n` +
+            `📸 Snapshot Decision: PASS (${conf}% conf — below threshold)\n` +
+            `⏰ No trade placed at 10-min mark\n` +
+            `💰 BTC @ $${Number(price).toLocaleString()} | Strike: $${Number(strike).toLocaleString()}`
           );
         }
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, action: 'skipped' }) };
@@ -201,13 +202,13 @@ exports.handler = async function(event, context) {
         const dir   = signal === 'UP' ? '🟢 UP' : '🔴 DOWN';
         const cost  = (result.contracts * result.price / 100).toFixed(2);
         await sendTelegram(TG_TOK, TG_CHAT,
-          `${dir} <b>BTC Signal Desk — TRADE PLACED</b>\n\n` +
-          `📊 Signal: <b>${signal}</b> (${conf}% confidence)\n` +
-          `💰 BTC Price: $${Number(price).toLocaleString()}\n` +
-          `🎯 Strike: $${Number(strike).toLocaleString()}\n` +
+          `${dir} <b>TRADE PLACED — 10-min Snapshot</b>\n\n` +
+          `📸 <b>Snapshot Decision: ${signal}</b> (${conf}% conf)\n` +
+          `⏰ Locked at 10-min mark — final 5 min won't change this\n\n` +
+          `💰 BTC @ $${Number(price).toLocaleString()} | Strike: $${Number(strike).toLocaleString()}\n` +
           `🎲 Market: ${result.marketTicker}\n` +
           `📦 ${result.contracts} contracts @ ${result.price}¢ = $${cost}\n` +
-          `💵 Balance: $${balance.toFixed(2)} | Trade: 5% = $${tradeDollars.toFixed(2)}`
+          `💵 Balance: $${balance.toFixed(2)} | 5% = $${tradeDollars.toFixed(2)}`
         );
       }
 
@@ -231,11 +232,16 @@ exports.handler = async function(event, context) {
       const won  = result === 'win';
       const icon = won ? '✅' : result === 'loss' ? '❌' : '⏭';
       const move = ((closePrice - openPrice) / openPrice * 100).toFixed(3);
+      const finalDir = closePrice > strike ? 'UP' : closePrice < strike ? 'DOWN' : 'FLAT';
+      const snapIcon = signal === 'UP' ? '🟢' : signal === 'DOWN' ? '🔴' : '⏭';
+      const finalIcon = finalDir === 'UP' ? '🟢' : finalDir === 'DOWN' ? '🔴' : '↔';
+      const matchIcon = signal === finalDir ? '✓ AGREED' : '✗ CHANGED';
 
       await sendTelegram(TG_TOK, TG_CHAT,
         `${icon} <b>Cycle Settled — ${result.toUpperCase()}</b>\n\n` +
-        `📊 Signal was: <b>${signal}</b> (${conf}%)\n` +
-        `📈 BTC moved: ${move}% (${signal === 'UP' ? 'needed +' : 'needed -'})\n` +
+        `${snapIcon} <b>10-min Snapshot:</b> ${signal} (${conf}% conf)\n` +
+        `${finalIcon} <b>15-min Final:</b> ${finalDir} — ${matchIcon}\n\n` +
+        `📈 BTC moved: ${move > 0 ? '+' : ''}${move}%\n` +
         `🔓 Open: $${Number(openPrice).toLocaleString()}\n` +
         `🔒 Close: $${Number(closePrice).toLocaleString()}\n` +
         `🎯 Strike: $${Number(strike).toLocaleString()}`
