@@ -55,23 +55,51 @@ async function sendTelegram(token, chatId, text) {
   });
 }
 
-// ── Kalshi helpers ────────────────────────────────────────────────
-async function kalshiGetBalance(apiKey) {
-  const res = await fetch('https://api.elections.kalshi.com/trade-api/v2/portfolio/balance', {
-    headers: { 'Authorization': 'Bearer ' + apiKey, 'Accept': 'application/json' }
+// ── Kalshi RSA signing ────────────────────────────────────────────
+const crypto = require('crypto');
+
+function kalshiSign(method, path, keyId, privateKeyPem) {
+  const ts = Date.now();
+  const msg = ts + method.toUpperCase() + path;
+  const sign = crypto.createSign('SHA256');
+  sign.update(msg);
+  sign.end();
+  const sig = sign.sign({
+    key: privateKeyPem,
+    dsaEncoding: 'ieee-p1363',
+    padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+    saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+  }, 'base64');
+  return { 'KALSHI-ACCESS-KEY': keyId, 'KALSHI-ACCESS-SIGNATURE': sig, 'KALSHI-ACCESS-TIMESTAMP': String(ts) };
+}
+
+function kalshiHeaders(method, path) {
+  const keyId  = process.env.KALSHI_API_KEY;
+  const pemRaw = process.env.KALSHI_PRIVATE_KEY || '';
+  const pem    = pemRaw.replace(/\\n/g, '\n');
+  const sig    = kalshiSign(method, path, keyId, pem);
+  return { ...sig, 'Accept': 'application/json', 'Content-Type': 'application/json' };
+}
+
+async function kalshiGetBalance() {
+  const path = '/trade-api/v2/portfolio/balance';
+  const res = await fetch('https://api.elections.kalshi.com' + path, {
+    headers: kalshiHeaders('GET', path)
   });
-  if (!res.ok) throw new Error('Kalshi balance HTTP ' + res.status);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error('Kalshi balance HTTP ' + res.status + ': ' + err);
+  }
   const data = await res.json();
-  // balance is in cents
   return (data.balance || 0) / 100;
 }
 
-async function kalshiPlaceTrade(apiKey, ticker, side, amountCents) {
-  // Get current orderbook to find best price
-  const mktRes = await fetch(
-    `https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=5`,
-    { headers: { 'Authorization': 'Bearer ' + apiKey, 'Accept': 'application/json' } }
-  );
+async function kalshiPlaceTrade(ticker, side, amountCents) {
+  // Get active markets
+  const mktPath = '/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=5';
+  const mktRes = await fetch('https://api.elections.kalshi.com' + mktPath, {
+    headers: kalshiHeaders('GET', '/trade-api/v2/markets')
+  });
   const mktData = await mktRes.json();
   const markets = mktData.markets || [];
   const now = Date.now() / 1000;
@@ -82,26 +110,19 @@ async function kalshiPlaceTrade(apiKey, ticker, side, amountCents) {
   const yesPrice = mkt.yes_ask || mkt.yes_price || 50;
   const noPrice  = mkt.no_ask  || mkt.no_price  || 50;
   const price    = side === 'yes' ? yesPrice : noPrice;
+  const contracts = Math.max(1, Math.floor(amountCents / price));
 
-  // Calculate contracts (each contract costs price¢, pays 100¢)
-  const contracts = Math.max(1, Math.floor((amountCents / price)));
+  const orderPath = '/trade-api/v2/portfolio/orders';
+  const orderBody = JSON.stringify({
+    action: 'buy', side, ticker: marketTicker, count: contracts, type: 'limit',
+    yes_price: side === 'yes' ? price : undefined,
+    no_price:  side === 'no'  ? price : undefined,
+  });
 
-  const orderRes = await fetch('https://api.elections.kalshi.com/trade-api/v2/portfolio/orders', {
+  const orderRes = await fetch('https://api.elections.kalshi.com' + orderPath, {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + apiKey,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      action:  'buy',
-      side:    side,        // 'yes' or 'no'
-      ticker:  marketTicker,
-      count:   contracts,
-      type:    'limit',
-      yes_price: side === 'yes' ? price : undefined,
-      no_price:  side === 'no'  ? price : undefined,
-    })
+    headers: kalshiHeaders('POST', orderPath),
+    body: orderBody
   });
 
   if (!orderRes.ok) {
@@ -188,13 +209,13 @@ exports.handler = async function(event, context) {
       }
 
       // Get balance → calculate 5% trade size
-      const balance     = await kalshiGetBalance(KAL_KEY);
+      const balance     = await kalshiGetBalance();
       const tradeDollars = Math.max(1, balance * 0.05);
       const tradeCents  = Math.round(tradeDollars * 100);
 
       // UP = buy YES (price will be ABOVE strike), DOWN = buy NO
       const side = signal === 'UP' ? 'yes' : 'no';
-      const result = await kalshiPlaceTrade(KAL_KEY, buildKalshiTicker(), side, tradeCents);
+      const result = await kalshiPlaceTrade(buildKalshiTicker(), side, tradeCents);
 
       // Save trade to Dropbox log
       let tradeLog = [];
