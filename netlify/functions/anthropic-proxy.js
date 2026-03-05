@@ -76,7 +76,10 @@ function kalshiSign(method, path, keyId, privateKeyPem) {
 function kalshiHeaders(method, path) {
   const keyId  = process.env.KALSHI_API_KEY;
   const pemRaw = process.env.KALSHI_PRIVATE_KEY || '';
-  const pem    = pemRaw.replace(/\\n/g, '\n');
+  // Netlify stores multiline env vars with literal \n - convert back to real newlines
+  const pem = pemRaw
+    .replace(/\\n/g, '\n')   // literal \n -> newline
+    .replace(/\n /g, '\n');   // remove any spaces after newlines
   const sig    = kalshiSign(method, path, keyId, pem);
   return { ...sig, 'Accept': 'application/json', 'Content-Type': 'application/json' };
 }
