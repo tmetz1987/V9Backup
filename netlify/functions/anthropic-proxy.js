@@ -64,9 +64,12 @@ function kalshiSign(method, path, keyId, privateKeyPem) {
   const sign = crypto.createSign('SHA256');
   sign.update(msg);
   sign.end();
+  // Support both PKCS8 (BEGIN PRIVATE KEY) and PKCS1 (BEGIN RSA PRIVATE KEY)
+  const keyObj = privateKeyPem.includes('BEGIN RSA PRIVATE KEY')
+    ? { key: privateKeyPem, format: 'pem', type: 'pkcs1' }
+    : { key: privateKeyPem, format: 'pem', type: 'pkcs8' };
   const sig = sign.sign({
-    key: privateKeyPem,
-    dsaEncoding: 'ieee-p1363',
+    ...keyObj,
     padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
     saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
   }, 'base64');
@@ -76,10 +79,12 @@ function kalshiSign(method, path, keyId, privateKeyPem) {
 function kalshiHeaders(method, path) {
   const keyId  = process.env.KALSHI_API_KEY;
   const pemRaw = process.env.KALSHI_PRIVATE_KEY || '';
-  // Netlify stores multiline env vars with literal \n - convert back to real newlines
+  // Netlify collapses line breaks to spaces — reconstruct proper PEM format
   const pem = pemRaw
-    .replace(/\\n/g, '\n')   // literal \n -> newline
-    .replace(/\n /g, '\n');   // remove any spaces after newlines
+    .replace(/\\n/g, '\n')          // literal \n -> newline
+    .replace(/-----\s+/g, '-----\n') // fix header/footer spacing
+    .replace(/\s+-----/g, '\n-----') // fix header/footer spacing
+    .replace(/ ([A-Za-z0-9+/=]{10})/g, '\n$1'); // space-separated chunks -> newlines
   const sig    = kalshiSign(method, path, keyId, pem);
   return { ...sig, 'Accept': 'application/json', 'Content-Type': 'application/json' };
 }
