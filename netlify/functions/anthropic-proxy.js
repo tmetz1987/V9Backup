@@ -115,16 +115,19 @@ async function kalshiPlaceTrade(ticker, side, amountCents) {
   if (!mkt) throw new Error('No active Kalshi market found');
 
   const marketTicker = mkt.ticker;
-  const yesPrice = mkt.yes_ask || mkt.yes_price || 50;
-  const noPrice  = mkt.no_ask  || mkt.no_price  || 50;
+  // Prices must be whole integers 1-99 (cents)
+  const rawYes = mkt.yes_ask || mkt.yes_bid || mkt.yes_price || 50;
+  const rawNo  = mkt.no_ask  || mkt.no_bid  || mkt.no_price  || 50;
+  const yesPrice = Math.min(99, Math.max(1, Math.round(rawYes)));
+  const noPrice  = Math.min(99, Math.max(1, Math.round(rawNo)));
   const price    = side === 'yes' ? yesPrice : noPrice;
   const contracts = Math.max(1, Math.floor(amountCents / price));
 
   const orderPath = '/trade-api/v2/portfolio/orders';
   const orderBody = JSON.stringify({
     action: 'buy', side, ticker: marketTicker, count: contracts, type: 'limit',
-    yes_price: side === 'yes' ? price : undefined,
-    no_price:  side === 'no'  ? price : undefined,
+    yes_price: side === 'yes' ? yesPrice : undefined,
+    no_price:  side === 'no'  ? noPrice  : undefined,
   });
 
   const orderRes = await fetch('https://api.elections.kalshi.com' + orderPath, {
