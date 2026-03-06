@@ -1,0 +1,21 @@
+name: Shadow Signal Engine
+
+on:
+  schedule:
+    # Fires at :00, :15, :30, :45 of every hour — 24/7
+    - cron: '0,15,30,45 * * * *'
+  workflow_dispatch: # allows manual trigger from GitHub Actions tab
+
+jobs:
+  run-shadow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger shadow engine
+        run: |
+          curl -X POST \
+            "${{ secrets.NETLIFY_SHADOW_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"source":"github-actions"}' \
+            --max-time 25 \
+            --silent \
+            --show-error
