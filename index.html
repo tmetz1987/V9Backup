@@ -727,7 +727,7 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
   </nav>
   <div class="hdr-right">
     <span id="hdr-price">—</span><span id="data-badge" style="font-size:.55rem;font-weight:700;letter-spacing:.06em;margin-left:6px;color:#3d7fff;cursor:default" title="Connecting to Binance…">◌ CONNECTING</span>
-    <span id="hdr-chg" class="chg-up">+0.00%</span>
+    <span id="hdr-chg" class="chg-up" title="Price change vs ~100 min ago" style="display:flex;flex-direction:column;align-items:center;line-height:1.2"><span>+0.00%</span><span style="font-size:.48rem;color:var(--dim);letter-spacing:.06em">100M CHG</span></span>
     <span id="session-badge" style="padding:2px 9px;border-radius:5px;font-size:.58rem;font-weight:700;letter-spacing:.07em;font-family:'DM Mono',monospace;white-space:nowrap;border:1px solid rgba(255,255,255,.12);transition:background .4s,color .4s;cursor:default" title="Current market session">— —</span>
     <span id="hdr-clock">--:--:--</span>
     <span class="tag">15M</span>
@@ -739,7 +739,9 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
       transition:all .2s;" 
       onmouseover="this.style.color='#ff4466';this.style.borderColor='rgba(255,68,102,0.4)'"
       onmouseout="this.style.color='rgba(255,255,255,0.5)';this.style.borderColor='rgba(255,255,255,0.12)'">
-      🔒 LOCK
+      <span style="display:flex;flex-direction:column;align-items:center;line-height:1.2">
+        <span>🔒</span><span style="font-size:.55rem">LOCK</span>
+      </span>
     </button>
     <button id="bot-toggle" onclick="toggleBot()" title="Enable/disable auto-trading" style="
       background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
@@ -747,7 +749,9 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
       padding:4px 10px;cursor:pointer;margin-left:6px;
       font-family:'DM Mono',monospace;letter-spacing:.05em;
       transition:all .3s;">
-      🤖 BOT: OFF
+      <span style="display:flex;flex-direction:column;align-items:center;line-height:1.2">
+        <span>🤖</span><span style="font-size:.55rem">BOT: OFF</span>
+      </span>
     </button>
     <!-- Trade % selector -->
     <div id="trade-pct-selector" style="display:flex;align-items:center;gap:4px;margin-left:10px;">
@@ -1518,7 +1522,7 @@ function applyTradePercent(pct) {
 }
 
 function setTradePercent(pct) {
-  if (pct === 5) { applyTradePercent(5); return; } // no warning needed for default
+  if (pct === 5 && G.tradePercent === 5) { applyTradePercent(5); return; } // already at 5%, no warning
   const modal = document.getElementById('trade-pct-modal');
   document.getElementById('trade-pct-modal-val').textContent = pct;
   modal.style.display = 'flex';
@@ -1539,7 +1543,7 @@ function confirmBotOn() {
   document.getElementById('bot-on-modal').style.display = 'none';
   G.botEnabled = true;
   const btn = document.getElementById('bot-toggle');
-  btn.textContent = '🤖 BOT: LIVE';
+  btn.innerHTML = '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.2"><span>🤖</span><span style="font-size:.55rem">BOT: LIVE</span></span>';
   btn.style.background    = 'rgba(0,214,143,0.15)';
   btn.style.borderColor   = 'rgba(0,214,143,0.5)';
   btn.style.color         = '#00d68f';
@@ -1556,6 +1560,26 @@ function toggleBot() {
     document.getElementById('bot-on-modal').style.display = 'flex';
     return;
   }
+  // Turning OFF — show confirmation
+  document.getElementById('bot-off-modal').style.display = 'flex';
+}
+
+function confirmBotOff() {
+  document.getElementById('bot-off-modal').style.display = 'none';
+  G.botEnabled = false;
+  const btn = document.getElementById('bot-toggle');
+  btn.innerHTML = '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.2"><span>🤖</span><span style="font-size:.55rem">BOT: OFF</span></span>';
+  btn.style.background  = 'rgba(255,255,255,0.06)';
+  btn.style.borderColor = 'rgba(255,255,255,0.12)';
+  btn.style.color       = 'rgba(255,255,255,0.4)';
+  console.log('[BOT] Auto-trading DISABLED');
+}
+
+function cancelBotOff() {
+  document.getElementById('bot-off-modal').style.display = 'none';
+}
+
+function _originalToggleBot() {
   G.botEnabled = !G.botEnabled;
   const btn = document.getElementById('bot-toggle');
   if (G.botEnabled) {
@@ -1565,7 +1589,7 @@ function toggleBot() {
     btn.style.color         = '#00d68f';
     console.log('[BOT] Auto-trading ENABLED — will trade real money');
   } else {
-    btn.textContent = '🤖 BOT: OFF';
+    btn.innerHTML = '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.2"><span>🤖</span><span style="font-size:.55rem">BOT: OFF</span></span>';
     btn.style.background    = 'rgba(255,255,255,0.06)';
     btn.style.borderColor   = 'rgba(255,255,255,0.12)';
     btn.style.color         = 'rgba(255,255,255,0.4)';
@@ -2160,7 +2184,8 @@ function _startChartLoop() {
         const _chg   = (_dp - _base) / _base * 100;
         const _chgEl = document.getElementById('hdr-chg');
         if (_chgEl) {
-          _chgEl.textContent = (_chg >= 0 ? '+' : '') + _chg.toFixed(2) + '%';
+          const _chgTxt = (_chg >= 0 ? '+' : '') + _chg.toFixed(2) + '%';
+          _chgEl.innerHTML = '<span>' + _chgTxt + '</span><span style="font-size:.48rem;color:var(--dim);letter-spacing:.06em">100M CHG</span>';
           _chgEl.className   = _chg >= 0 ? 'chg-up' : 'chg-down';
         }
       }
@@ -5854,6 +5879,20 @@ async function fetchFearGreed() {
       >
         <span id="clear-confirm-btn-label">I'm Sure</span>
       </button>
+    </div>
+  </div>
+</div>
+<!-- Bot OFF Confirmation Modal -->
+<div id="bot-off-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1px solid rgba(255,68,102,0.4);border-radius:12px;padding:32px 28px;max-width:420px;width:90%;text-align:center;box-shadow:0 0 40px rgba(255,68,102,0.15)">
+    <div style="font-size:2rem;margin-bottom:12px">🛑</div>
+    <div style="font-size:1rem;font-weight:800;color:#ff4466;margin-bottom:16px;letter-spacing:.03em">DISABLE AUTO-TRADING?</div>
+    <div style="font-size:.82rem;color:rgba(255,255,255,0.75);line-height:1.7;margin-bottom:20px">
+      The bot will stop placing trades immediately. Any trades already placed on Kalshi will remain open until they settle naturally.
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button onclick="cancelBotOff()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-size:.8rem;cursor:pointer;font-family:'DM Mono',monospace">Keep Trading</button>
+      <button onclick="confirmBotOff()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(255,68,102,0.5);background:rgba(255,68,102,0.15);color:#ff4466;font-size:.8rem;font-weight:800;cursor:pointer;font-family:'DM Mono',monospace">🛑 Disable Bot</button>
     </div>
   </div>
 </div>
