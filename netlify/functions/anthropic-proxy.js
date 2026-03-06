@@ -204,7 +204,7 @@ exports.handler = async function(event, context) {
   // Body: { signal: 'UP'|'DOWN'|'PASS', conf: 75, price: 68000, strike: 67800 }
   if (event.httpMethod === 'POST' && qs.trade) {
     try {
-      const { signal, conf, price, strike, botEnabled, tradePercent } = JSON.parse(event.body);
+      const { signal, conf, price, strike, botEnabled, tradePercent, passOverride, overridePct, overrideMin, overrideSec } = JSON.parse(event.body);
       const tradePct = Math.min(20, Math.max(1, Number(tradePercent) || 5)) / 100;
 
       if (signal === 'PASS') {
@@ -254,7 +254,7 @@ exports.handler = async function(event, context) {
         await sendTelegram(TG_TOK, TG_CHAT,
           `${dir} <b>TRADE PLACED — 10-min Snapshot</b>\n\n` +
           `📸 <b>Snapshot Decision: ${signal}</b> (${conf}% conf)\n` +
-          `⏰ Locked at 10-min mark\n\n` +
+          `⏰ ${passOverride ? "⚡ LATE ENTRY — PASS Override at " + overrideMin + ":" + String(overrideSec).padStart(2,"0") + " (" + overridePct + "% move triggered)" : "Locked at 10-min mark"}\n\n` +
           `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()}\n` +
           `💰 BTC @ 10min: $${Number(price).toLocaleString()}\n` +
           `🎲 Market: ${result.marketTicker}\n` +
