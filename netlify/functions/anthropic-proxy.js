@@ -116,7 +116,7 @@ async function kalshiPlaceTrade(ticker, side, amountCents) {
   if (!mkt) throw new Error('No active Kalshi market found');
 
   const marketTicker = mkt.ticker;
-  // Prices must be whole integers 1-99 (cents)
+  // Prices must be whole integers 1-99 (cents) — used for contract count calculation only
   const rawYes = mkt.yes_ask || mkt.yes_bid || mkt.yes_price || 50;
   const rawNo  = mkt.no_ask  || mkt.no_bid  || mkt.no_price  || 50;
   const yesPrice = Math.min(99, Math.max(1, Math.round(rawYes)));
@@ -125,10 +125,9 @@ async function kalshiPlaceTrade(ticker, side, amountCents) {
   const contracts = Math.max(1, Math.floor(amountCents / price));
 
   const orderPath = '/trade-api/v2/portfolio/orders';
+  // ── FIX: use market order so trade fills instantly ──
   const orderBody = JSON.stringify({
-    action: 'buy', side, ticker: marketTicker, count: contracts, type: 'limit',
-    yes_price: side === 'yes' ? yesPrice : undefined,
-    no_price:  side === 'no'  ? noPrice  : undefined,
+    action: 'buy', side, ticker: marketTicker, count: contracts, type: 'market',
   });
 
   const orderRes = await fetch('https://api.elections.kalshi.com' + orderPath, {
@@ -232,7 +231,7 @@ exports.handler = async function(event, context) {
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, action: 'skipped' }) };
       }
 
-      // Get balance → calculate 5% trade size
+      // Get balance → calculate trade size
       const balance     = await kalshiGetBalance();
       const tradeDollars = Math.max(1, balance * tradePct);
       const tradeCents  = Math.round(tradeDollars * 100);
@@ -311,13 +310,12 @@ exports.handler = async function(event, context) {
       let netLine = '';
       if (result === 'win' && contracts > 0 && tradePrice > 0) {
         try {
-          // Wait 8 seconds for Kalshi to settle and credit the balance
+          // Wait 20 seconds for Kalshi to settle and credit the balance
           await new Promise(r => setTimeout(r, 20000));
           console.log('[SETTLE] contracts=' + contracts + ' tradePrice=' + tradePrice + 'c');
           const balanceAfter = await kalshiGetBalance();
           // tradePrice is in cents (1-99), contracts is count
           // Each contract pays $1.00 (100 cents) on win
-          // Fee is $0.07 (7 cents) per contract
           const grossWin   = contracts * 100;          // cents — each contract pays $1.00
           const costBasis  = contracts * tradePrice;   // cents — fees already included in price
           const netCents   = grossWin - costBasis;     // simple: payout minus what you paid
