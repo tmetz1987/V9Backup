@@ -1247,6 +1247,7 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
           <th>Conf</th>
           <th>Open</th>
           <th>10-Min</th>
+          <th>Outcome</th>
           <th>15-Min</th>
           <th>Move</th>
           <th>Result</th>
@@ -3197,33 +3198,7 @@ function applySignalStabilization() {
   // that's a strong directional statement — override PASS to match price direction.
   // Only fires if we have a clean snapshot and aren't in chop lock.
   if (!G.chopLockActive && G.cycleOpen > 0 && G.snapshotTaken && G.snapshot) {
-    const _elapsed = G.cycleElapsed;
-    if (_elapsed >= 600 && _elapsed < 720) {
-      const _priceDev = (G.price - G.cycleOpen) / G.cycleOpen;
-      const _devAbs   = Math.abs(_priceDev);
-      if (_devAbs >= 0.004) { // 0.40%
-        const _priceDir = _priceDev > 0 ? 'UP' : 'DOWN';
-        if (G.recommendation === 'PASS' || G.recommendation === 'FORMING') {
-          G.recommendation = _priceDir;
-          G.confidence     = Math.min(85, G.rawConf + 15); // boost but cap at 85
-          // Update snapshot to reflect override
-          G.snapshot.signal = _priceDir;
-          G.snapshot.conf   = G.confidence;
-          const _sdvP = document.getElementById('snap-decision-val');
-          const _sdbP = document.getElementById('snap-decision');
-          if (_sdvP && _sdbP) {
-            const _col = _priceDir === 'UP' ? '#00d68f' : '#ff2d55';
-            const _bgc = _priceDir === 'UP' ? 'rgba(0,214,143,0.08)' : 'rgba(255,45,85,0.08)';
-            const _bdc = _priceDir === 'UP' ? 'rgba(0,214,143,0.25)' : 'rgba(255,45,85,0.25)';
-            _sdvP.textContent = '📐 ' + _priceDir + ' @ ' + G.confidence + '% (PRICE +' + (_devAbs*100).toFixed(2) + '%)';
-            _sdvP.style.color = _col;
-            _sdbP.style.background = _bgc;
-            _sdbP.style.borderColor = _bdc;
-          }
-          console.log('[PRICE-OVR] ' + _priceDir + ' — price ' + (_priceDev*100).toFixed(3) + '% from strike in 10-12 window');
-        }
-      }
-    }
+    // 10-12 min signal flip removed — snapshot locks at 10-min and does not change
   }
 }
 
@@ -5008,6 +4983,15 @@ function renderHistory() {
       <td><span class="conf-chip" style="background:${confCol}18;color:${confCol};border:1px solid ${confCol}38">${row.conf}%</span></td>
       <td class="t-price">$${openP.toLocaleString()}</td>
       <td class="t-price" style="color:var(--pass);font-size:.72rem">$${(row.snapshotPrice||openP).toLocaleString()}</td>
+      <td style="text-align:center">\${(() => {
+        if (row.result === 'skip') return '<span style="color:var(--dim);font-size:.7rem;font-weight:700">— PASS</span>';
+        const snapSig = row.snapshot ? row.snapshot.signal : row.rec;
+        const actualDir = row.actualDir || (closeP >= openP ? 'UP' : 'DOWN');
+        const same = snapSig === actualDir;
+        return same
+          ? '<span style="color:#00d68f;font-weight:800;font-size:.75rem">✓ SAME</span>'
+          : '<span style="color:#ff2d55;font-weight:800;font-size:.75rem">✗ DIFF</span>';
+      })()}</td>
       <td class="t-price">$${closeP.toLocaleString()}</td>
       <td class="t-price" style="color:${moveUp?'var(--up)':'var(--down)'}">
         ${moveUp?'▲':'▼'} ${Math.abs(movePct)}%<br>
