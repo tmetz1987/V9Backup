@@ -213,7 +213,7 @@ exports.handler = async function(event, context) {
             `⏭ <b>SKIP — 10-min Snapshot</b>\n\n` +
             `📸 Snapshot Decision: PASS (${conf}% conf — below threshold)\n` +
             `⏰ No trade placed at 10-min mark\n` +
-            `💰 BTC @ $${Number(price).toLocaleString()} | Strike: $${Number(strike).toLocaleString()}`
+            `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()} | BTC @ 10min: $${Number(price).toLocaleString()}`
           );
         }
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, action: 'skipped' }) };
@@ -253,11 +253,12 @@ exports.handler = async function(event, context) {
         await sendTelegram(TG_TOK, TG_CHAT,
           `${dir} <b>TRADE PLACED — 10-min Snapshot</b>\n\n` +
           `📸 <b>Snapshot Decision: ${signal}</b> (${conf}% conf)\n` +
-          `⏰ Locked at 10-min mark — final 5 min won't change this\n\n` +
-          `💰 BTC @ $${Number(price).toLocaleString()} | Strike: $${Number(strike).toLocaleString()}\n` +
+          `⏰ Locked at 10-min mark\n\n` +
+          `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()}\n` +
+          `💰 BTC @ 10min: $${Number(price).toLocaleString()}\n` +
           `🎲 Market: ${result.marketTicker}\n` +
           `📦 ${result.contracts} contracts @ ${result.price}¢ = $${cost}\n` +
-          `💵 Balance: $${balance.toFixed(2)} | 5% = $${tradeDollars.toFixed(2)}`
+          `💵 5% of Balance Trading: $${tradeDollars.toFixed(2)} | Balance: $${balance.toFixed(2)}`
         );
       }
 
@@ -291,9 +292,8 @@ exports.handler = async function(event, context) {
         `${snapIcon} <b>10-min Snapshot:</b> ${signal} (${conf}% conf)\n` +
         `${finalIcon} <b>15-min Final:</b> ${finalDir} — ${matchIcon}\n\n` +
         `📈 BTC moved: ${move > 0 ? '+' : ''}${move}%\n` +
-        `🔓 Open: $${Number(openPrice).toLocaleString()}\n` +
-        `🔒 Close: $${Number(closePrice).toLocaleString()}\n` +
-        `🎯 Strike: $${Number(strike).toLocaleString()}`
+        `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()}\n` +
+        `🔒 BTC Close @ 15min: $${Number(closePrice).toLocaleString()}`
       );
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
     } catch(e) {
