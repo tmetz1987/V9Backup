@@ -3373,13 +3373,20 @@ async function pollKalshiMarket() {
     }
     G.kalshiYesPrice = yesPrice; // feed into AI scoring
 
-    // ── Use Kalshi strike as fallback cycleOpen on refresh ──────────
-    // Kalshi's floor_strike is the exact BTC price the market was opened at
-    // which matches the 15-min cycle open price perfectly
+    // ── Use Kalshi floor_strike as authoritative cycleOpen ──────────
+    // floor_strike is set by Kalshi exactly when the 15-min window opens
+    // Always trust it over candle estimates or saved state
     const kalshiStrike = mkt.floor_strike || mkt.strike_price || 0;
-    if (kalshiStrike > 0 && G.cycleOpen === 0) {
-      G.cycleOpen = kalshiStrike;
-      console.log('[STRIKE] Set from Kalshi market data: $' + kalshiStrike);
+    if (kalshiStrike > 0) {
+      // Check if current cycleOpen is wrong (0, or more than $50 off from Kalshi)
+      const diff = Math.abs(G.cycleOpen - kalshiStrike);
+      if (G.cycleOpen === 0 || diff > 50) {
+        G.cycleOpen = kalshiStrike;
+        // Update the displayed strike price on screen
+        const strikeEl = document.getElementById('cycle-strike');
+        if (strikeEl) strikeEl.textContent = '$' + kalshiStrike.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+        console.log('[STRIKE] Corrected from Kalshi floor_strike: $' + kalshiStrike + ' (was $' + (G.cycleOpen||0) + ')');
+      }
     }
     console.log('[KALSHI] ' + (mkt.ticker||ticker) + ' YES=' + yesPrice + '¢ crowd=' + crowdDir);
   } catch(e) {
