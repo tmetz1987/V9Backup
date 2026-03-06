@@ -1247,7 +1247,6 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
           <th>Conf</th>
           <th>Open</th>
           <th>10-Min</th>
-          <th>Outcome</th>
           <th>15-Min</th>
           <th>Move</th>
           <th>Result</th>
@@ -4983,15 +4982,7 @@ function renderHistory() {
       <td><span class="conf-chip" style="background:${confCol}18;color:${confCol};border:1px solid ${confCol}38">${row.conf}%</span></td>
       <td class="t-price">$${openP.toLocaleString()}</td>
       <td class="t-price" style="color:var(--pass);font-size:.72rem">$${(row.snapshotPrice||openP).toLocaleString()}</td>
-      <td style="text-align:center">${(() => {
-        if (row.result === 'skip') return '<span style="color:var(--dim);font-size:.7rem;font-weight:700">— PASS</span>';
-        const snapSig = row.snapshot ? row.snapshot.signal : row.rec;
-        const actualDir = row.actualDir || (closeP >= openP ? 'UP' : 'DOWN');
-        const same = snapSig === actualDir;
-        return same
-          ? '<span style="color:#00d68f;font-weight:800;font-size:.75rem">✓ SAME</span>'
-          : '<span style="color:#ff2d55;font-weight:800;font-size:.75rem">✗ DIFF</span>';
-      })()}</td>
+
       <td class="t-price">$${closeP.toLocaleString()}</td>
       <td class="t-price" style="color:${moveUp?'var(--up)':'var(--down)'}">
         ${moveUp?'▲':'▼'} ${Math.abs(movePct)}%<br>
