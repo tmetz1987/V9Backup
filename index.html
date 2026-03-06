@@ -4983,7 +4983,7 @@ function renderHistory() {
       <td><span class="conf-chip" style="background:${confCol}18;color:${confCol};border:1px solid ${confCol}38">${row.conf}%</span></td>
       <td class="t-price">$${openP.toLocaleString()}</td>
       <td class="t-price" style="color:var(--pass);font-size:.72rem">$${(row.snapshotPrice||openP).toLocaleString()}</td>
-      <td style="text-align:center">\${(() => {
+      <td style="text-align:center">${(() => {
         if (row.result === 'skip') return '<span style="color:var(--dim);font-size:.7rem;font-weight:700">— PASS</span>';
         const snapSig = row.snapshot ? row.snapshot.signal : row.rec;
         const actualDir = row.actualDir || (closeP >= openP ? 'UP' : 'DOWN');
