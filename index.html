@@ -3262,7 +3262,33 @@ function applySignalStabilization() {
   // that's a strong directional statement — override PASS to match price direction.
   // Only fires if we have a clean snapshot and aren't in chop lock.
   if (!G.chopLockActive && G.cycleOpen > 0 && G.snapshotTaken && G.snapshot) {
-    // 10-12 min signal flip removed — snapshot locks at 10-min and does not change
+    // ── 10-12 min PASS override — only fires if no trade taken yet ──
+    const _elapsed = G.cycleElapsed;
+    if (_elapsed >= 600 && _elapsed < 720 && G.snapshotTaken && G.snapshot) {
+      if (G.recommendation === 'PASS') {
+        const _priceDev = (G.price - G.cycleOpen) / G.cycleOpen;
+        const _devAbs   = Math.abs(_priceDev);
+        if (_devAbs >= 0.0025) { // 0.25% threshold
+          const _priceDir = _priceDev > 0 ? 'UP' : 'DOWN';
+          G.recommendation = _priceDir;
+          G.confidence     = Math.min(80, Math.round(_devAbs * 10000)); // scale conf to move size, cap 80
+          G.snapshot.signal = _priceDir;
+          G.snapshot.conf   = G.confidence;
+          const _sdvP = document.getElementById('snap-decision-val');
+          const _sdbP = document.getElementById('snap-decision');
+          if (_sdvP && _sdbP) {
+            const _col = _priceDir === 'UP' ? '#00d68f' : '#ff2d55';
+            const _bgc = _priceDir === 'UP' ? 'rgba(0,214,143,0.08)' : 'rgba(255,45,85,0.08)';
+            const _bdc = _priceDir === 'UP' ? 'rgba(0,214,143,0.25)' : 'rgba(255,45,85,0.25)';
+            _sdvP.textContent = '📐 ' + _priceDir + ' @ ' + G.confidence + '% (PRICE MOVE +' + (_devAbs*100).toFixed(2) + '%)';
+            _sdvP.style.color = _col;
+            _sdbP.style.background = _bgc;
+            _sdbP.style.borderColor = _bdc;
+          }
+          console.log('[PASS-OVR] ' + _priceDir + ' — price moved ' + (_priceDev*100).toFixed(3) + '% from strike in 10-12 window');
+        }
+      }
+    }
   }
 }
 
