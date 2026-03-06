@@ -252,7 +252,7 @@ exports.handler = async function(event, context) {
         const dir   = signal === 'UP' ? '🟢 UP' : '🔴 DOWN';
         const cost  = (result.contracts * result.price / 100).toFixed(2);
         await sendTelegram(TG_TOK, TG_CHAT,
-          `${dir} <b>TRADE PLACED — 10-min Snapshot</b>\n\n` +
+          `${dir} <b>TRADE PLACED — ${passOverride ? "⚡ Late Entry Override" : "10-min Snapshot"}</b>\n\n` +
           `📸 <b>Snapshot Decision: ${signal}</b> (${conf}% conf)\n` +
           `⏰ ${passOverride ? "⚡ LATE ENTRY — PASS Override at " + overrideMin + ":" + String(overrideSec).padStart(2,"0") + " (" + overridePct + "% move triggered)" : "Locked at 10-min mark"}\n\n` +
           `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()}\n` +
@@ -294,19 +294,19 @@ exports.handler = async function(event, context) {
       if (result === 'win' && contracts > 0 && tradePrice > 0) {
         try {
           // Wait 8 seconds for Kalshi to settle and credit the balance
-          await new Promise(r => setTimeout(r, 8000));
+          await new Promise(r => setTimeout(r, 15000));
           console.log('[SETTLE] contracts=' + contracts + ' tradePrice=' + tradePrice + 'c');
           const balanceAfter = await kalshiGetBalance();
           // tradePrice is in cents (1-99), contracts is count
           // Each contract pays $1.00 (100 cents) on win
           // Fee is $0.07 (7 cents) per contract
-          const grossWin   = contracts * 100;          // cents
-          const costBasis  = contracts * tradePrice;   // cents (tradePrice already in cents)
-          const fees       = contracts * 7;            // cents
-          const netCents   = grossWin - costBasis - fees;
+          const grossWin   = contracts * 100;          // cents — each contract pays $1.00
+          const costBasis  = contracts * tradePrice;   // cents — fees already included in price
+          const netCents   = grossWin - costBasis;     // simple: payout minus what you paid
           const netDollars = (netCents / 100).toFixed(2);
           balanceLine = `\n💵 Kalshi Balance After Win: $${balanceAfter.toFixed(2)}`;
-          netLine     = `\n💰 Amount Won After Fees: $${netDollars}`;
+          const netLabel = parseFloat(netDollars) >= 0 ? '💰 Net Profit After Fees' : '⚠️ Net Loss After Fees';
+          netLine = `\n${netLabel}: $${netDollars}`;
         } catch(e) { /* skip if balance fetch fails */ }
       }
 
