@@ -204,6 +204,17 @@ exports.handler = async function(event, context) {
   // Called by website when snapshot is taken (10-min mark)
   // Body: { signal: 'UP'|'DOWN'|'PASS', conf: 75, price: 68000, strike: 67800 }
   if (event.httpMethod === 'POST' && qs.trade) {
+    // ── Timeout watchdog — Netlify free tier limit is 10s ──────────
+    const _tradeTimeout = setTimeout(async () => {
+      try {
+        await sendTelegram(TG_TOK, TG_CHAT,
+          `⏱ <b>Trade Timeout Warning</b>\n\n` +
+          `The proxy function hit Netlify's 10s limit and may not have placed the trade.\n\n` +
+          `If this keeps happening, upgrade to Netlify paid tier (26s timeout).`
+        );
+      } catch(e) {}
+    }, 9000); // fire at 9s before Netlify kills at 10s
+
     try {
       const { signal, conf, price, strike, botEnabled, tradePercent, passOverride, overridePct, overrideMin, overrideSec } = JSON.parse(event.body);
       const tradePct = Math.min(20, Math.max(1, Number(tradePercent) || 5)) / 100;
@@ -270,7 +281,13 @@ exports.handler = async function(event, context) {
       try {
         await sendTelegram(TG_TOK, TG_CHAT, `⚠️ <b>Trade Error</b>\n${e.message}`);
       } catch(e2) {}
+      clearTimeout(_tradeTimeout);
+      await sendTelegram(TG_TOK, TG_CHAT,
+        `⚠️ <b>Trade Error</b>\n\nKalshi order failed: ${JSON.stringify(e.message)}`
+      ).catch(()=>{});
       return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: e.message }) };
+    } finally {
+      clearTimeout(_tradeTimeout);
     }
   }
 
