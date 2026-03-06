@@ -99,7 +99,8 @@ async function kalshiGetBalance() {
     throw new Error('Kalshi balance HTTP ' + res.status + ': ' + err);
   }
   const data = await res.json();
-  return (data.balance || 0) / 100;
+  // balance = cash only, portfolio_value = open positions — add both for true total
+  return ((data.balance || 0) + (data.portfolio_value || 0)) / 100;
 }
 
 async function kalshiPlaceTrade(ticker, side, amountCents) {
