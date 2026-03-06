@@ -293,11 +293,17 @@ exports.handler = async function(event, context) {
       let netLine = '';
       if (result === 'win' && contracts > 0 && tradePrice > 0) {
         try {
+          // Wait 8 seconds for Kalshi to settle and credit the balance
+          await new Promise(r => setTimeout(r, 8000));
+          console.log('[SETTLE] contracts=' + contracts + ' tradePrice=' + tradePrice + 'c');
           const balanceAfter = await kalshiGetBalance();
-          const grossWin  = contracts * 100;                        // $1.00 per contract in cents
-          const costBasis = contracts * tradePrice;                 // what we paid in cents
-          const fees      = contracts * 7;                          // $0.07 per contract in cents
-          const netCents  = grossWin - costBasis - fees;
+          // tradePrice is in cents (1-99), contracts is count
+          // Each contract pays $1.00 (100 cents) on win
+          // Fee is $0.07 (7 cents) per contract
+          const grossWin   = contracts * 100;          // cents
+          const costBasis  = contracts * tradePrice;   // cents (tradePrice already in cents)
+          const fees       = contracts * 7;            // cents
+          const netCents   = grossWin - costBasis - fees;
           const netDollars = (netCents / 100).toFixed(2);
           balanceLine = `\n💵 Kalshi Balance After Win: $${balanceAfter.toFixed(2)}`;
           netLine     = `\n💰 Amount Won After Fees: $${netDollars}`;
