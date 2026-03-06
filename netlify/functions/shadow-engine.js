@@ -562,13 +562,26 @@ async function sendTelegram(text) {
 
 // ── BTC price fetch (multi-source with fallback) ──────────────────
 async function fetchBTCCandles() {
-  // Fetch 1-minute OHLCV from Binance — last 200 candles
-  const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=200', {
+  // Fetch 1-minute OHLCV from Kraken — last 200 candles
+  // Kraken interval=1 means 1-minute candles, since= fetches from timestamp
+  const since = Math.floor(Date.now()/1000) - 200*60;
+  const res = await fetch(`https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1&since=${since}`, {
     headers: { 'Accept': 'application/json' }
   });
-  if (!res.ok) throw new Error('Binance candles HTTP ' + res.status);
-  const rows = await res.json();
-  return rows.map(r => ({ t:+r[0], o:+r[1], h:+r[2], l:+r[3], c:+r[4], v:+r[5] }));
+  if (!res.ok) throw new Error('Kraken candles HTTP ' + res.status);
+  const data = await res.json();
+  if (data.error && data.error.length) throw new Error('Kraken error: ' + data.error[0]);
+  const rows = data.result && data.result.XXBTZUSD;
+  if (!rows || !rows.length) throw new Error('Kraken candles empty');
+  // Kraken OHLC: [time, open, high, low, close, vwap, volume, count]
+  return rows.slice(-200).map(r => ({
+    t: +r[0] * 1000, // convert to ms
+    o: parseFloat(r[1]),
+    h: parseFloat(r[2]),
+    l: parseFloat(r[3]),
+    c: parseFloat(r[4]),
+    v: parseFloat(r[6]),
+  }));
 }
 
 async function fetchBTCPrice() {
@@ -723,4 +736,3 @@ exports.handler = async function(event, context) {
     return { statusCode:502, headers:CORS, body:JSON.stringify({ error:e.message }) };
   }
 };
-
