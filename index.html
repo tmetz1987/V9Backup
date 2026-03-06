@@ -3289,7 +3289,7 @@ function applySignalStabilization() {
   if (!G.chopLockActive && G.cycleOpen > 0 && G.snapshotTaken && G.snapshot) {
     // ── 10-12 min PASS override — only fires if no trade taken yet ──
     const _elapsed = G.cycleElapsed;
-    if (_elapsed >= 600 && _elapsed < 720 && G.snapshotTaken && G.snapshot) {
+    if (_elapsed >= 600 && _elapsed < 780 && G.snapshotTaken && G.snapshot) { // 10-13 min window
       if (G.recommendation === 'PASS') {
         const _priceDev = (G.price - G.cycleOpen) / G.cycleOpen;
         const _devAbs   = Math.abs(_priceDev);
@@ -3310,7 +3310,11 @@ function applySignalStabilization() {
             _sdbP.style.background = _bgc;
             _sdbP.style.borderColor = _bdc;
           }
-          console.log('[PASS-OVR] ' + _priceDir + ' — price moved ' + (_priceDev*100).toFixed(3) + '% from strike in 10-12 window');
+          G.snapshot.passOverride = true;
+          G.snapshot.overridePct  = +(_devAbs*100).toFixed(3);
+          G.snapshot.overrideMin  = Math.floor(G.cycleElapsed / 60);
+          G.snapshot.overrideSec  = G.cycleElapsed % 60;
+          console.log('[PASS-OVR] ' + _priceDir + ' — price moved ' + (_priceDev*100).toFixed(3) + '% from strike in 10-13 window');
         }
       }
     }
@@ -3866,7 +3870,14 @@ function tickCycle() {
         const _res = await fetch('/.netlify/functions/anthropic-proxy?trade=1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ signal: _sig, conf: _conf, price: _price, strike: _strike, botEnabled: G.botEnabled, tradePercent: G.tradePercent || 5 })
+          body: JSON.stringify({
+            signal: _sig, conf: _conf, price: _price, strike: _strike,
+            botEnabled: G.botEnabled, tradePercent: G.tradePercent || 5,
+            passOverride: G.snapshot.passOverride || false,
+            overridePct:  G.snapshot.overridePct  || 0,
+            overrideMin:  G.snapshot.overrideMin  || 0,
+            overrideSec:  G.snapshot.overrideSec  || 0
+          })
         });
         const _data = await _res.json();
         if (_data.action === 'traded') {
