@@ -3293,6 +3293,7 @@ function applySignalStabilization() {
       if (G.recommendation === 'PASS') {
         const _priceDev = (G.price - G.cycleOpen) / G.cycleOpen;
         const _devAbs   = Math.abs(_priceDev);
+        console.log('[PASS-OVR CHECK] elapsed=' + _elapsed + ' dev=' + (_devAbs*100).toFixed(3) + '% fired=' + G._passOverrideFired);
         if (_devAbs >= 0.0025) { // 0.25% threshold
           const _priceDir = _priceDev > 0 ? 'UP' : 'DOWN';
           G.recommendation = _priceDir;
@@ -3315,6 +3316,47 @@ function applySignalStabilization() {
           G.snapshot.overrideMin  = Math.floor(G.cycleElapsed / 60);
           G.snapshot.overrideSec  = G.cycleElapsed % 60;
           console.log('[PASS-OVR] ' + _priceDir + ' — price moved ' + (_priceDev*100).toFixed(3) + '% from strike in 10-13 window');
+
+          // ── Fire trade for PASS override ─────────────────────────
+          if (!G._passOverrideFired) {
+            G._passOverrideFired = true; // prevent firing multiple times
+            (async () => {
+              try {
+                const _sig    = G.snapshot.signal;
+                const _conf   = G.snapshot.conf;
+                const _price  = G.price;
+                const _strike = G.cycleOpen || 0;
+                if (!G.botEnabled) {
+                  console.log('[PASS-OVR TRADE] Bot is OFF — no trade placed');
+                  return;
+                }
+                console.log('[PASS-OVR TRADE] Firing: ' + _sig + ' ' + _conf + '% @ $' + _price);
+                const _res = await fetch('/.netlify/functions/anthropic-proxy?trade=1', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    signal: _sig, conf: _conf, price: _price, strike: _strike,
+                    botEnabled: G.botEnabled, tradePercent: G.tradePercent || 5,
+                    passOverride: true,
+                    overridePct:  G.snapshot.overridePct,
+                    overrideMin:  G.snapshot.overrideMin,
+                    overrideSec:  G.snapshot.overrideSec
+                  })
+                });
+                const _data = await _res.json();
+                if (_data.action === 'traded') {
+                  console.log('[PASS-OVR TRADE] ✅ Placed:', _data.result.contracts, 'contracts @', _data.result.price + '¢');
+                  G.lastTradeContracts = _data.result.contracts || 0;
+                  G.lastTradePrice     = _data.result.price     || 0;
+                  G.lastTradePlaced    = true;
+                } else if (_data.error) {
+                  console.error('[PASS-OVR TRADE] ❌ Error:', _data.error);
+                }
+              } catch(e) {
+                console.error('[PASS-OVR TRADE] fetch error:', e);
+              }
+            })();
+          }
         }
       }
     }
@@ -3884,6 +3926,7 @@ function tickCycle() {
           console.log('[TRADE] ✅ Placed:', _data.result.contracts, 'contracts @', _data.result.price + '¢');
           G.lastTradeContracts = _data.result.contracts || 0;
           G.lastTradePrice     = _data.result.price     || 0;
+          G.lastTradePlaced    = true;
         } else if (_data.action === 'skipped') {
           console.log('[TRADE] ⏭ Skipped — PASS signal');
         } else if (_data.error) {
@@ -3965,6 +4008,8 @@ function tickCycle() {
     G.recommendation  = 'FORMING';
     G.snapshot        = null;
     G.snapshotTaken   = false;
+    G._passOverrideFired = false; // reset for new cycle
+    G.lastTradePlaced    = false; // reset trade placed flag
     // Reset chop lock and swing candle for new cycle
     G.strikeCrossCount  = 0;
     G._lastAboveStrike  = null;
@@ -4038,7 +4083,7 @@ function completeCycle() {
   (async () => {
     try {
       const _h = G.history[0];
-      if (_h && _h.rec !== 'PASS' && G.botEnabled) {
+      if (_h && G.lastTradePlaced && G.botEnabled) {
         await fetch('/.netlify/functions/anthropic-proxy?settle=1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
