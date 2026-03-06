@@ -204,7 +204,8 @@ exports.handler = async function(event, context) {
   // Body: { signal: 'UP'|'DOWN'|'PASS', conf: 75, price: 68000, strike: 67800 }
   if (event.httpMethod === 'POST' && qs.trade) {
     try {
-      const { signal, conf, price, strike, botEnabled } = JSON.parse(event.body);
+      const { signal, conf, price, strike, botEnabled, tradePercent } = JSON.parse(event.body);
+      const tradePct = Math.min(20, Math.max(1, Number(tradePercent) || 5)) / 100;
 
       if (signal === 'PASS') {
         // Only notify on skip if bot is live
@@ -221,7 +222,7 @@ exports.handler = async function(event, context) {
 
       // Get balance → calculate 5% trade size
       const balance     = await kalshiGetBalance();
-      const tradeDollars = Math.max(1, balance * 0.05);
+      const tradeDollars = Math.max(1, balance * tradePct);
       const tradeCents  = Math.round(tradeDollars * 100);
 
       // UP = buy YES (price will be ABOVE strike), DOWN = buy NO
@@ -258,7 +259,7 @@ exports.handler = async function(event, context) {
           `💰 BTC @ 10min: $${Number(price).toLocaleString()}\n` +
           `🎲 Market: ${result.marketTicker}\n` +
           `📦 ${result.contracts} contracts @ ${result.price}¢ = $${cost}\n` +
-          `💵 5% of Balance Trading: $${tradeDollars.toFixed(2)} | Balance: $${balance.toFixed(2)}`
+          `💵 ${Math.round(tradePct*100)}% of Balance Trading: $${tradeDollars.toFixed(2)} | Balance: $${balance.toFixed(2)}`
         );
       }
 
