@@ -749,6 +749,14 @@ tbody td { padding: 10px 18px; font-size: .75rem; color: var(--text); vertical-a
       transition:all .3s;">
       🤖 BOT: OFF
     </button>
+    <!-- Trade % selector -->
+    <div id="trade-pct-selector" style="display:flex;align-items:center;gap:4px;margin-left:10px;">
+      <span style="font-size:.55rem;color:rgba(255,255,255,0.35);font-family:'DM Mono',monospace;letter-spacing:.05em;margin-right:2px">TRADE%</span>
+      <button onclick="setTradePercent(5)"  id="tp-5"  style="padding:3px 7px;border-radius:5px;font-size:.65rem;font-family:'DM Mono',monospace;cursor:pointer;border:1px solid rgba(0,214,143,0.5);background:rgba(0,214,143,0.15);color:#00d68f;font-weight:700">5%</button>
+      <button onclick="setTradePercent(10)" id="tp-10" style="padding:3px 7px;border-radius:5px;font-size:.65rem;font-family:'DM Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);font-weight:700">10%</button>
+      <button onclick="setTradePercent(15)" id="tp-15" style="padding:3px 7px;border-radius:5px;font-size:.65rem;font-family:'DM Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);font-weight:700">15%</button>
+      <button onclick="setTradePercent(20)" id="tp-20" style="padding:3px 7px;border-radius:5px;font-size:.65rem;font-family:'DM Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);font-weight:700">20%</button>
+    </div>
   </div>
 </header>
 
@@ -1430,6 +1438,7 @@ const G = {
   // 10-min snapshot (fires once elapsed >= 600s)
   snapshot:        null,   // { signal, conf, price, sigs, bullVotes, bearVotes }
   snapshotTaken:   false,
+  tradePercent:    5,    // % of balance to trade (5/10/15/20)
   // Self-learning: per-indicator accuracy trackers
   // Each indicator tracks correct/total predictions — weights auto-adjust
   learnedWeights: { mom: 3.5, ema: 2.5, rsi: 2.0, macd: 2.0, vol: 1.5, candle: 1.5, bb: 1.0 },
@@ -1490,6 +1499,42 @@ const GLOBAL_SAVE_KEY = 'btc_signal_global_v2';
 
 // ── Login ─────────────────────────────────────────────────────────
 const CORRECT_PW = 'moneyprinter1001';
+function applyTradePercent(pct) {
+  G.tradePercent = pct;
+  [5,10,15,20].forEach(p => {
+    const btn = document.getElementById('tp-' + p);
+    if (!btn) return;
+    if (p === pct) {
+      btn.style.background   = 'rgba(0,214,143,0.15)';
+      btn.style.borderColor  = 'rgba(0,214,143,0.5)';
+      btn.style.color        = '#00d68f';
+    } else {
+      btn.style.background   = 'rgba(255,255,255,0.06)';
+      btn.style.borderColor  = 'rgba(255,255,255,0.12)';
+      btn.style.color        = 'rgba(255,255,255,0.4)';
+    }
+  });
+  console.log('[TRADE%] Set to ' + pct + '%');
+}
+
+function setTradePercent(pct) {
+  if (pct === 5) { applyTradePercent(5); return; } // no warning needed for default
+  const modal = document.getElementById('trade-pct-modal');
+  document.getElementById('trade-pct-modal-val').textContent = pct;
+  modal.style.display = 'flex';
+  modal._pendingPct = pct;
+}
+
+function confirmTradePercent() {
+  const modal = document.getElementById('trade-pct-modal');
+  applyTradePercent(modal._pendingPct);
+  modal.style.display = 'none';
+}
+
+function cancelTradePercent() {
+  document.getElementById('trade-pct-modal').style.display = 'none';
+}
+
 function toggleBot() {
   G.botEnabled = !G.botEnabled;
   const btn = document.getElementById('bot-toggle');
@@ -3734,7 +3779,7 @@ function tickCycle() {
         const _res = await fetch('/.netlify/functions/anthropic-proxy?trade=1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ signal: _sig, conf: _conf, price: _price, strike: _strike, botEnabled: G.botEnabled })
+          body: JSON.stringify({ signal: _sig, conf: _conf, price: _price, strike: _strike, botEnabled: G.botEnabled, tradePercent: G.tradePercent || 5 })
         });
         const _data = await _res.json();
         if (_data.action === 'traded') {
@@ -5747,6 +5792,21 @@ async function fetchFearGreed() {
       >
         <span id="clear-confirm-btn-label">I'm Sure</span>
       </button>
+    </div>
+  </div>
+</div>
+<!-- Trade % Warning Modal -->
+<div id="trade-pct-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1px solid rgba(255,165,0,0.4);border-radius:12px;padding:32px 28px;max-width:420px;width:90%;text-align:center;box-shadow:0 0 40px rgba(255,165,0,0.15)">
+    <div style="font-size:2rem;margin-bottom:12px">⚠️</div>
+    <div style="font-size:1rem;font-weight:800;color:#ffaa00;margin-bottom:16px;letter-spacing:.03em">RISK WARNING</div>
+    <div style="font-size:.82rem;color:rgba(255,255,255,0.75);line-height:1.7;margin-bottom:20px">
+      You are changing your trade size to <b id="trade-pct-modal-val" style="color:#ffaa00"></b>% of your Kalshi balance.<br><br>
+      By confirming, you acknowledge that you understand the increased risk associated with larger position sizes. <b>No guarantees of winning are implied.</b> This is not financial advice. You are solely responsible for all trades placed.
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button onclick="cancelTradePercent()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-size:.8rem;cursor:pointer;font-family:'DM Mono',monospace">Cancel</button>
+      <button onclick="confirmTradePercent()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(255,165,0,0.5);background:rgba(255,165,0,0.15);color:#ffaa00;font-size:.8rem;font-weight:800;cursor:pointer;font-family:'DM Mono',monospace">I Understand — Apply <span id="trade-pct-confirm-val"></span></button>
     </div>
   </div>
 </div>
