@@ -277,7 +277,7 @@ exports.handler = async function(event, context) {
   // Called at cycle end to report win/loss
   if (event.httpMethod === 'POST' && qs.settle) {
     try {
-      const { signal, result, openPrice, closePrice, strike, conf } = JSON.parse(event.body);
+      const { signal, result, openPrice, closePrice, strike, conf, contracts, tradePrice } = JSON.parse(event.body);
       if (signal === 'PASS') return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
 
       const won  = result === 'win';
@@ -288,13 +288,30 @@ exports.handler = async function(event, context) {
       const finalIcon = finalDir === 'UP' ? '🟢' : finalDir === 'DOWN' ? '🔴' : '↔';
       const matchIcon = signal === finalDir ? '✓ AGREED' : '✗ CHANGED';
 
+      // Calculate net proceeds for WIN
+      let balanceLine = '';
+      let netLine = '';
+      if (result === 'win' && contracts > 0 && tradePrice > 0) {
+        try {
+          const balanceAfter = await kalshiGetBalance();
+          const grossWin  = contracts * 100;                        // $1.00 per contract in cents
+          const costBasis = contracts * tradePrice;                 // what we paid in cents
+          const fees      = contracts * 7;                          // $0.07 per contract in cents
+          const netCents  = grossWin - costBasis - fees;
+          const netDollars = (netCents / 100).toFixed(2);
+          balanceLine = `\n💵 Kalshi Balance After Win: $${balanceAfter.toFixed(2)}`;
+          netLine     = `\n💰 Amount Won After Fees: $${netDollars}`;
+        } catch(e) { /* skip if balance fetch fails */ }
+      }
+
       await sendTelegram(TG_TOK, TG_CHAT,
         `${icon} <b>Cycle Settled — ${result.toUpperCase()}</b>\n\n` +
         `${snapIcon} <b>10-min Snapshot:</b> ${signal} (${conf}% conf)\n` +
         `${finalIcon} <b>15-min Final:</b> ${finalDir} — ${matchIcon}\n\n` +
         `📈 BTC moved: ${move > 0 ? '+' : ''}${move}%\n` +
         `🎯 Beginning Cycle Strike: $${Number(strike).toLocaleString()}\n` +
-        `🔒 BTC Close @ 15min: $${Number(closePrice).toLocaleString()}`
+        `🔒 BTC Close @ 15min: $${Number(closePrice).toLocaleString()}` +
+        netLine + balanceLine
       );
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
     } catch(e) {
