@@ -294,7 +294,7 @@ exports.handler = async function(event, context) {
       if (result === 'win' && contracts > 0 && tradePrice > 0) {
         try {
           // Wait 8 seconds for Kalshi to settle and credit the balance
-          await new Promise(r => setTimeout(r, 15000));
+          await new Promise(r => setTimeout(r, 45000));
           console.log('[SETTLE] contracts=' + contracts + ' tradePrice=' + tradePrice + 'c');
           const balanceAfter = await kalshiGetBalance();
           // tradePrice is in cents (1-99), contracts is count
