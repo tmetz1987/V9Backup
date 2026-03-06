@@ -3882,6 +3882,8 @@ function tickCycle() {
         const _data = await _res.json();
         if (_data.action === 'traded') {
           console.log('[TRADE] ✅ Placed:', _data.result.contracts, 'contracts @', _data.result.price + '¢');
+          G.lastTradeContracts = _data.result.contracts || 0;
+          G.lastTradePrice     = _data.result.price     || 0;
         } else if (_data.action === 'skipped') {
           console.log('[TRADE] ⏭ Skipped — PASS signal');
         } else if (_data.error) {
@@ -4046,7 +4048,9 @@ function completeCycle() {
             openPrice:  _h.entryPrice,
             closePrice: _h.exitPrice,
             strike:     G.cycleOpen || _h.entryPrice,
-            conf:       _h.conf
+            conf:       _h.conf,
+            contracts:  G.lastTradeContracts || 0,
+            tradePrice: G.lastTradePrice     || 0
           })
         });
         console.log('[SETTLE] Reported:', _h.result.toUpperCase(), '— Telegram notified');
