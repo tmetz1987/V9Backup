@@ -1535,7 +1535,27 @@ function cancelTradePercent() {
   document.getElementById('trade-pct-modal').style.display = 'none';
 }
 
+function confirmBotOn() {
+  document.getElementById('bot-on-modal').style.display = 'none';
+  G.botEnabled = true;
+  const btn = document.getElementById('bot-toggle');
+  btn.textContent = '🤖 BOT: LIVE';
+  btn.style.background    = 'rgba(0,214,143,0.15)';
+  btn.style.borderColor   = 'rgba(0,214,143,0.5)';
+  btn.style.color         = '#00d68f';
+  console.log('[BOT] Auto-trading ENABLED — will trade real money');
+}
+
+function cancelBotOn() {
+  document.getElementById('bot-on-modal').style.display = 'none';
+}
+
 function toggleBot() {
+  if (!G.botEnabled) {
+    // Turning ON — show warning first
+    document.getElementById('bot-on-modal').style.display = 'flex';
+    return;
+  }
   G.botEnabled = !G.botEnabled;
   const btn = document.getElementById('bot-toggle');
   if (G.botEnabled) {
@@ -5792,6 +5812,21 @@ async function fetchFearGreed() {
       >
         <span id="clear-confirm-btn-label">I'm Sure</span>
       </button>
+    </div>
+  </div>
+</div>
+<!-- Bot ON Warning Modal -->
+<div id="bot-on-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1px solid rgba(0,214,143,0.4);border-radius:12px;padding:32px 28px;max-width:420px;width:90%;text-align:center;box-shadow:0 0 40px rgba(0,214,143,0.15)">
+    <div style="font-size:2rem;margin-bottom:12px">🤖</div>
+    <div style="font-size:1rem;font-weight:800;color:#00d68f;margin-bottom:16px;letter-spacing:.03em">ACTIVATING BOT</div>
+    <div style="font-size:.82rem;color:rgba(255,255,255,0.75);line-height:1.7;margin-bottom:20px">
+      ⚠️ <b>Warning</b> — It MAY be possible that I make you rich.<br><br>
+      <span style="color:rgba(255,255,255,0.45);font-size:.75rem">Not financial advice — just my personal opinion. You are solely responsible for all trades placed by this bot. No guarantees of any kind are implied.</span>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button onclick="cancelBotOn()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-size:.8rem;cursor:pointer;font-family:'DM Mono',monospace">Cancel</button>
+      <button onclick="confirmBotOn()" style="padding:9px 24px;border-radius:7px;border:1px solid rgba(0,214,143,0.5);background:rgba(0,214,143,0.15);color:#00d68f;font-size:.8rem;font-weight:800;cursor:pointer;font-family:'DM Mono',monospace">🚀 Let's Get Rich</button>
     </div>
   </div>
 </div>
