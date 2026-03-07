@@ -3927,6 +3927,7 @@ function tickCycle() {
           G.lastTradeContracts = _data.result.contracts || 0;
           G.lastTradePrice     = _data.result.price     || 0;
           G.lastTradePlaced    = true;
+          G._passOverrideFired = true;
         } else if (_data.action === 'skipped') {
           console.log('[TRADE] ⏭ Skipped — PASS signal');
         } else if (_data.error) {
