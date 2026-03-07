@@ -3290,7 +3290,7 @@ function applySignalStabilization() {
     // ── 10-12 min PASS override — only fires if no trade taken yet ──
     const _elapsed = G.cycleElapsed;
     if (_elapsed >= 600 && _elapsed < 780 && G.snapshotTaken && G.snapshot) { // 10-13 min window
-      if (G.recommendation === 'PASS') {
+      if (G.recommendation === 'PASS' && !G.lastTradePlaced) {
         const _priceDev = (G.price - G.cycleOpen) / G.cycleOpen;
         const _devAbs   = Math.abs(_priceDev);
         console.log('[PASS-OVR CHECK] elapsed=' + _elapsed + ' dev=' + (_devAbs*100).toFixed(3) + '% fired=' + G._passOverrideFired);
