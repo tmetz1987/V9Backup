@@ -2,8 +2,8 @@ name: Shadow Signal Engine
 
 on:
   schedule:
-    # Fires at :00, :15, :30, :45 of every hour — 24/7
-    - cron: '0,15,30,45 * * * *'
+    # Fires at :10, :25, :40, :55 of every hour — matches the 10-min snapshot window
+    - cron: '10,25,40,55 * * * *'
   workflow_dispatch: # allows manual trigger from GitHub Actions tab
 
 jobs:
