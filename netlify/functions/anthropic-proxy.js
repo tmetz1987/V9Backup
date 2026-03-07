@@ -126,8 +126,8 @@ async function kalshiPlaceTrade(ticker, side, amountCents) {
 
   const orderPath = '/trade-api/v2/portfolio/orders';
   // ── Use aggressive limit price (+5 cents above ask) to guarantee immediate fill ──
-  const aggressiveYes = Math.min(99, yesPrice + 5);
-  const aggressiveNo  = Math.min(99, noPrice  + 5);
+  const aggressiveYes = Math.min(99, yesPrice + 10);
+  const aggressiveNo  = Math.min(99, noPrice  + 10);
   const orderBody = JSON.stringify({
     action: 'buy', side, ticker: marketTicker, count: contracts, type: 'limit',
     yes_price: side === 'yes' ? aggressiveYes : undefined,
